@@ -7,24 +7,50 @@ document.addEventListener('DOMContentLoaded', () => {
     const visualizer = new MapVisualizer('map-container');
     visualizer.init();
 
-    // Binding des boutons de contrôle du Superviseur
+    // Binding des éléments de statut
     const btnPlay = document.getElementById('btn-play');
     const btnPause = document.getElementById('btn-pause');
     const btnStop = document.getElementById('btn-stop');
     const statusBadge = document.getElementById('supervisor-status');
+    const activeScriptLabel = document.getElementById('active-script');
+    const lastKeyBadge = document.getElementById('last-key');
 
     btnPlay?.addEventListener('click', () => {
         if (statusBadge) statusBadge.innerText = 'Machine à États: En Cours (Navigation)';
+        if (activeScriptLabel) activeScriptLabel.innerText = 'Recolte_Astrub_Circuit.json';
         console.log('[UI Event] Démarrage de la séquence d\'action');
     });
 
     btnPause?.addEventListener('click', () => {
         if (statusBadge) statusBadge.innerText = 'Machine à États: En Pause';
+        if (activeScriptLabel) activeScriptLabel.innerText = 'En Pause';
         console.log('[UI Event] Mise en pause du système');
     });
 
     btnStop?.addEventListener('click', () => {
         if (statusBadge) statusBadge.innerText = 'Machine à États: Arrêt d\'Urgence (EmergencyStop)';
+        if (activeScriptLabel) activeScriptLabel.innerText = 'Aucun script (Interrompu)';
         console.log('[UI Event] Arrêt d\'urgence manuel');
+    });
+
+    // Interception des frappes clavier en temps réel pour affichage dans la barre de statut
+    window.addEventListener('keydown', (e) => {
+        if (!lastKeyBadge) return;
+        
+        let keyDisplay = e.key;
+        if (e.key === 'ArrowUp') keyDisplay = '↑ Flèche Haut';
+        else if (e.key === 'ArrowDown') keyDisplay = '↓ Flèche Bas';
+        else if (e.key === 'ArrowLeft') keyDisplay = '← Flèche Gauche';
+        else if (e.key === 'ArrowRight') keyDisplay = '→ Flèche Droite';
+        else if (e.key === ' ') keyDisplay = 'Espace';
+
+        lastKeyBadge.innerText = keyDisplay;
+        lastKeyBadge.classList.add('pressed');
+
+        setTimeout(() => {
+            lastKeyBadge.classList.remove('pressed');
+        }, 300);
+
+        console.log(`[Key Listener] Touche enfoncée: ${e.key}`);
     });
 });

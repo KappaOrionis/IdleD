@@ -50,6 +50,20 @@
             <!-- Rendu Cartographique -->
             <section id="map-container"></section>
         </main>
+
+        <!-- Barre de Statut Inférieure -->
+        <footer class="bottom-status-bar">
+            <div class="status-item">
+                <span class="status-icon">📜</span>
+                <span class="status-label">Script en cours :</span>
+                <span class="status-value highlight" id="active-script">Aucun script actif</span>
+            </div>
+            <div class="status-item">
+                <span class="status-icon">⌨️</span>
+                <span class="status-label">Dernière touche clavier :</span>
+                <kbd class="key-badge" id="last-key">Aucune</kbd>
+            </div>
+        </footer>
     </div>
 
     <script type="module" src="main.js"></script>

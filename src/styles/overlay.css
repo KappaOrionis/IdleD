@@ -147,3 +147,49 @@ body {
   background: #0d1117;
   position: relative;
 }
+
+.bottom-status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: rgba(10, 14, 23, 0.95);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.85rem;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-label {
+  color: var(--text-muted);
+}
+
+.status-value.highlight {
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+
+.key-badge {
+  background: rgba(58, 134, 255, 0.2);
+  color: var(--accent-blue);
+  border: 1px solid var(--accent-blue);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-family: monospace;
+  font-weight: bold;
+  font-size: 0.85rem;
+  box-shadow: 0 0 6px rgba(58, 134, 255, 0.3);
+  transition: all 0.15s ease;
+}
+
+.key-badge.pressed {
+  background: var(--accent-gold);
+  color: #12161f;
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 10px var(--accent-gold);
+}
+
