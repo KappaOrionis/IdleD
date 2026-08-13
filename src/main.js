@@ -16,11 +16,28 @@ document.addEventListener('DOMContentLoaded', () => {
     const lastKeyBadge = document.getElementById('last-key');
 
     // Éléments de la Carte d'Information Dofus Unity
+    const mapCard = document.querySelector('.map-info-card');
     const mapZoneName = document.getElementById('map-zone-name');
     const mapCoords = document.getElementById('map-coords');
     const mapLevel = document.getElementById('map-level');
+    const mapErrorBanner = document.getElementById('map-error-banner');
 
-    function updateMapDisplay(zoneName, posX, posY, level) {
+    function updateMapDisplay(isDetected, zoneName, posX, posY, level, errorMsg = null) {
+        if (!isDetected) {
+            mapCard?.classList.add('detection-error');
+            mapLevel?.classList.add('error');
+            if (mapZoneName) mapZoneName.innerText = '⚠️ Détection Impossible';
+            if (mapCoords) mapCoords.innerText = '[-- , --]';
+            if (mapLevel) mapLevel.innerText = 'Indisponible';
+            if (mapErrorBanner) {
+                mapErrorBanner.innerText = errorMsg || 'Fenêtre Dofus Unity masquée ou en cours de chargement';
+            }
+            console.warn(`[La Noxine Signal] Échec de détection : ${errorMsg}`);
+            return;
+        }
+
+        mapCard?.classList.remove('detection-error');
+        mapLevel?.classList.remove('error');
         if (mapZoneName) mapZoneName.innerText = zoneName;
         if (mapCoords) mapCoords.innerText = `[${posX}, ${posY}]`;
         if (mapLevel) mapLevel.innerText = `Niveau ${level}`;
@@ -28,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Données initiales détectées (Exemple de la capture Dofus Unity : Baie de Sufokia [12, 27] - Niveau 10)
-    updateMapDisplay('Baie de Sufokia (Sufokia)', 12, 27, 10);
+    updateMapDisplay(true, 'Baie de Sufokia (Sufokia)', 12, 27, 10);
 
     btnPlay?.addEventListener('click', () => {
         if (statusBadge) statusBadge.innerText = 'Machine à États: En Cours (Navigation)';

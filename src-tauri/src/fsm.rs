@@ -4,19 +4,23 @@ use std::sync::{Arc, Mutex};
 /// Données cartographiques de la tuile et zone actuellement détectées sur Dofus Unity.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MapInfo {
+    pub is_detected: bool,
     pub zone_name: String,
-    pub pos_x: i32,
-    pub pos_y: i32,
-    pub area_level: u32,
+    pub pos_x: Option<i32>,
+    pub pos_y: Option<i32>,
+    pub area_level: Option<u32>,
+    pub error_message: Option<String>,
 }
 
 impl Default for MapInfo {
     fn default() -> Self {
         Self {
+            is_detected: true,
             zone_name: "Baie de Sufokia (Sufokia)".to_string(),
-            pos_x: 12,
-            pos_y: 27,
-            area_level: 10,
+            pos_x: Some(12),
+            pos_y: Some(27),
+            area_level: Some(10),
+            error_message: None,
         }
     }
 }
@@ -89,17 +93,36 @@ mod tests {
     fn test_map_info_updates() {
         let fsm = StateMachine::new();
         let default_info = fsm.get_map_info();
-        assert_eq!(default_info.pos_x, 12);
-        assert_eq!(default_info.pos_y, 27);
+        assert!(default_info.is_detected);
+        assert_eq!(default_info.pos_x, Some(12));
+        assert_eq!(default_info.pos_y, Some(27));
 
         let new_info = MapInfo {
+            is_detected: true,
             zone_name: "Forêt d'Astrub".to_string(),
-            pos_x: -5,
-            pos_y: -18,
-            area_level: 20,
+            pos_x: Some(-5),
+            pos_y: Some(-18),
+            area_level: Some(20),
+            error_message: None,
         };
         let updated = fsm.update_map_info(new_info.clone());
         assert_eq!(updated, new_info);
         assert_eq!(fsm.get_map_info(), new_info);
+    }
+
+    #[test]
+    fn test_map_info_detection_failed() {
+        let fsm = StateMachine::new();
+        let failed_info = MapInfo {
+            is_detected: false,
+            zone_name: "Détection impossible".to_string(),
+            pos_x: None,
+            pos_y: None,
+            area_level: None,
+            error_message: Some("Fenêtre masquée".to_string()),
+        };
+        let updated = fsm.update_map_info(failed_info.clone());
+        assert!(!updated.is_detected);
+        assert_eq!(updated.error_message, Some("Fenêtre masquée".to_string()));
     }
 }

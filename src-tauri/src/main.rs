@@ -49,13 +49,23 @@ fn get_current_map_info(state: State<'_, Mutex<AppState>>) -> Result<MapInfo, St
 }
 
 #[tauri::command]
-fn update_map_info(zone_name: String, pos_x: i32, pos_y: i32, area_level: u32, state: State<'_, Mutex<AppState>>) -> Result<MapInfo, String> {
+fn update_map_info(
+    is_detected: bool,
+    zone_name: String,
+    pos_x: Option<i32>,
+    pos_y: Option<i32>,
+    area_level: Option<u32>,
+    error_message: Option<String>,
+    state: State<'_, Mutex<AppState>>
+) -> Result<MapInfo, String> {
     let app = state.lock().unwrap();
     let new_info = MapInfo {
+        is_detected,
         zone_name,
         pos_x,
         pos_y,
         area_level,
+        error_message,
     };
     Ok(app.fsm.update_map_info(new_info))
 }
