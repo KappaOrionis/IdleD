@@ -44,8 +44,8 @@ document.addEventListener('DOMContentLoaded', () => {
         visualizer.addTileMarker(posX, posY, { zone: zoneName, level: level });
     }
 
-    // Données initiales détectées (Exemple de la capture Dofus Unity : Baie de Sufokia [12, 27] - Niveau 10)
-    updateMapDisplay(true, 'Baie de Sufokia (Sufokia)', 12, 27, 10);
+    // État initial : dofus.exe non lancé par défaut
+    updateMapDisplay(false, 'Détection Impossible', null, null, null, 'Fenêtre Dofus Unity introuvable (dofus.exe non lancé)');
 
     btnPlay?.addEventListener('click', () => {
         if (statusBadge) statusBadge.innerText = 'Machine à États: En Cours (Navigation)';

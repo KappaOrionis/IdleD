@@ -15,12 +15,12 @@ pub struct MapInfo {
 impl Default for MapInfo {
     fn default() -> Self {
         Self {
-            is_detected: true,
-            zone_name: "Baie de Sufokia (Sufokia)".to_string(),
-            pos_x: Some(12),
-            pos_y: Some(27),
-            area_level: Some(10),
-            error_message: None,
+            is_detected: false,
+            zone_name: "Détection Impossible".to_string(),
+            pos_x: None,
+            pos_y: None,
+            area_level: None,
+            error_message: Some("Fenêtre Dofus Unity introuvable (dofus.exe non lancé)".to_string()),
         }
     }
 }
@@ -93,9 +93,9 @@ mod tests {
     fn test_map_info_updates() {
         let fsm = StateMachine::new();
         let default_info = fsm.get_map_info();
-        assert!(default_info.is_detected);
-        assert_eq!(default_info.pos_x, Some(12));
-        assert_eq!(default_info.pos_y, Some(27));
+        assert!(!default_info.is_detected);
+        assert_eq!(default_info.pos_x, None);
+        assert_eq!(default_info.pos_y, None);
 
         let new_info = MapInfo {
             is_detected: true,
