@@ -15,6 +15,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeScriptLabel = document.getElementById('active-script');
     const lastKeyBadge = document.getElementById('last-key');
 
+    // Éléments de la Carte d'Information Dofus Unity
+    const mapZoneName = document.getElementById('map-zone-name');
+    const mapCoords = document.getElementById('map-coords');
+    const mapLevel = document.getElementById('map-level');
+
+    function updateMapDisplay(zoneName, posX, posY, level) {
+        if (mapZoneName) mapZoneName.innerText = zoneName;
+        if (mapCoords) mapCoords.innerText = `[${posX}, ${posY}]`;
+        if (mapLevel) mapLevel.innerText = `Niveau ${level}`;
+        visualizer.addTileMarker(posX, posY, { zone: zoneName, level: level });
+    }
+
+    // Données initiales détectées (Exemple de la capture Dofus Unity : Baie de Sufokia [12, 27] - Niveau 10)
+    updateMapDisplay('Baie de Sufokia (Sufokia)', 12, 27, 10);
+
     btnPlay?.addEventListener('click', () => {
         if (statusBadge) statusBadge.innerText = 'Machine à États: En Cours (Navigation)';
         if (activeScriptLabel) activeScriptLabel.innerText = 'Recolte_Astrub_Circuit.json';

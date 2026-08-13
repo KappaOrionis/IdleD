@@ -7,7 +7,7 @@ mod fsm;
 mod hotkeys;
 mod ipc;
 
-use fsm::{StateMachine, SupervisorState};
+use fsm::{MapInfo, StateMachine, SupervisorState};
 use hotkeys::{DirectionKey, HotkeyManager};
 use ipc::{AgentIPCBridge, IPCMessage};
 use std::sync::Mutex;
@@ -38,6 +38,24 @@ fn set_supervisor_state(new_state: String, state: State<'_, Mutex<AppState>>) ->
     };
     let updated = app.fsm.transition_to(target)?;
     Ok(format!("{:?}", updated))
+}
+
+#[tauri::command]
+fn get_current_map_info(state: State<'_, Mutex<AppState>>) -> Result<MapInfo, String> {
+    let app = state.lock().unwrap();
+    Ok(app.fsm.get_map_info())
+}
+
+#[tauri::command]
+fn update_map_info(zone_name: String, pos_x: i32, pos_y: i32, area_level: u32, state: State<'_, Mutex<AppState>>) -> Result<MapInfo, String> {
+    let app = state.lock().unwrap();
+    let new_info = MapInfo {
+        zone_name,
+        pos_x,
+        pos_y,
+        area_level,
+    };
+    Ok(app.fsm.update_map_info(new_info))
 }
 
 #[tauri::command]
@@ -82,6 +100,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_supervisor_state,
             set_supervisor_state,
+            get_current_map_info,
+            update_map_info,
             trigger_directional_move,
             trigger_emergency_stop,
             send_ipc_message

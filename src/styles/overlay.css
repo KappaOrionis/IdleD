@@ -193,3 +193,64 @@ body {
   box-shadow: 0 0 10px var(--accent-gold);
 }
 
+.map-info-card {
+  background: rgba(18, 22, 31, 0.75);
+  border: 1px solid var(--border-glow);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.map-info-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 6px;
+}
+
+.map-zone-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--accent-gold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-info-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.map-detail-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.map-detail-label {
+  color: var(--text-muted);
+}
+
+.map-detail-value {
+  font-family: monospace;
+  font-weight: bold;
+}
+
+.map-level-badge {
+  background: rgba(224, 169, 109, 0.15);
+  color: var(--accent-gold);
+  border: 1px solid var(--accent-gold);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+
