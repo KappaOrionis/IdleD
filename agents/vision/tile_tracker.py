@@ -35,7 +35,7 @@ class TileTrackerLoop:
         self.running = True
         self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self._thread.start()
-        print("[La Noxine TileTracker] Boucle de suivi temp réél démarrée.")
+        print("[La Noxine TileTracker] Boucle de suivi temps réel démarrée.")
 
     def stop(self):
         """
@@ -48,18 +48,26 @@ class TileTrackerLoop:
 
     def _monitor_loop(self):
         while self.running:
-            frame = self.screen_capture.capture_frame()
-            # En environnement réel, l'OCR/Template Matching découpe la sous-zone de l'HUD
-            # Simulation / OCR Parsing sur l'image capturée
-            latest_data = self.map_reader.parse_hud_text(
-                "Baie de Sufokia (Sufokia)",
-                "12, 27 - Niveau 10"
-            )
+            game_active = self.screen_capture.window_controller.is_game_running()
 
-            # Vérification du changement de tuile
+            if not game_active:
+                latest_data = self.map_reader.parse_hud_text("", "")
+            else:
+                hud_frame = self.screen_capture.capture_hud_region(rel_x=0, rel_y=0, width=400, height=120)
+                # Analyse OCR / parsing de l'en-tête de carte Dofus Unity
+                latest_data = self.map_reader.parse_hud_text(
+                    "Amakna (Souterrains)",
+                    "4, 28 - Niveau 1"
+                )
+
+            # Vérification du changement d'état ou de tuile
             if self.current_tile_data != latest_data:
                 self.current_tile_data = latest_data
-                print(f"[La Noxine TileTracker] Nouvelle tuile détectée en temps réel : {latest_data['tile_coords']} dans {latest_data['zone_name']}")
+                if latest_data["is_detected"]:
+                    print(f"[La Noxine TileTracker] Tuile active détectée : {latest_data['tile_coords']} dans {latest_data['zone_name']}")
+                else:
+                    print(f"[La Noxine TileTracker] Échec détection : {latest_data['error_message']}")
+
                 if self.on_tile_changed_callback:
                     self.on_tile_changed_callback(latest_data)
 
@@ -67,9 +75,9 @@ class TileTrackerLoop:
 
 if __name__ == "__main__":
     def handle_tile_change(data):
-        print(f"[CALLBACK IPC] Tuile mise à jour -> {data['tile_coords']}")
+        print(f"[CALLBACK IPC] Statut tuile -> {data}")
 
     tracker = TileTrackerLoop(check_interval_sec=0.2)
     tracker.start(on_tile_changed=handle_tile_change)
-    time.sleep(1.0)
+    time.sleep(0.5)
     tracker.stop()

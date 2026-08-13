@@ -1,53 +1,59 @@
 import ctypes
 import time
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, List
 
-# Titre par défaut et nom d'exécutable pour Dofus Unity
-TARGET_WINDOW_TITLE = "Dofus"
-TARGET_PROCESS_NAME = "dofus.exe"
+TARGET_PROCESS_NAMES = ["dofus.exe", "dofus3.exe", "dofus-unity.exe", "dofus"]
+TARGET_TITLE_KEYWORDS = ["dofus", "amakna", "sufokia", "astrub"]
 
 class DofusWindowController:
     """
     Agent d'Exécution Motrice (Le Scaphandre) - Module d'Interaction Fenêtre Windows (dofus.exe).
     Utilise l'API Win32 native (ctypes) sans dépendances lourdes externes pour:
-    - Détecter le Handle (HWND) du client Dofus Unity
+    - Détecter le Handle (HWND) du client Dofus Unity via Titre ou Processus
     - Obtenir la géométrie exacte de la fenêtre (rect & client area)
     - Activer / Mettre au premier plan la fenêtre dofus.exe
     - Convertir les coordonnées relatives du jeu en coordonnées absolues écran
     """
-    def __init__(self, window_title: str = TARGET_WINDOW_TITLE):
-        self.window_title = window_title
+    def __init__(self, window_title_keyword: str = "dofus"):
+        self.window_title_keyword = window_title_keyword.lower()
         self.user32 = ctypes.windll.user32
+        self.kernel32 = ctypes.windll.kernel32
         self.hwnd = None
 
     def find_window(self) -> Optional[int]:
         """
-        Recherche le handle HWND de la fenêtre Dofus.
+        Recherche le handle HWND de la fenêtre Dofus via plusieurs stratégies Win32.
         """
-        hwnd = self.user32.FindWindowW(None, self.window_title)
-        if hwnd != 0:
-            self.hwnd = hwnd
-            return hwnd
-        
-        # Fallback enum windows si le titre contient Dofus
-        found_hwnd = []
+        found_hwnds: List[Tuple[int, str]] = []
 
         def enum_windows_callback(h, extra):
-            length = self.user32.GetWindowTextLengthW(h)
-            if length > 0:
-                buffer = ctypes.create_unicode_buffer(length + 1)
-                self.user32.GetWindowTextW(h, buffer, length + 1)
-                if "dofus" in buffer.value.lower():
-                    found_hwnd.append(h)
+            if self.user32.IsWindowVisible(h):
+                length = self.user32.GetWindowTextLengthW(h)
+                if length > 0:
+                    buffer = ctypes.create_unicode_buffer(length + 1)
+                    self.user32.GetWindowTextW(h, buffer, length + 1)
+                    title = buffer.value.lower()
+                    if any(kw in title for kw in TARGET_TITLE_KEYWORDS):
+                        found_hwnds.append((h, buffer.value))
             return True
 
         WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_int)
         self.user32.EnumWindows(WNDENUMPROC(enum_windows_callback), 0)
 
-        if found_hwnd:
-            self.hwnd = found_hwnd[0]
+        if found_hwnds:
+            # Préférer la première fenêtre visible trouvée
+            self.hwnd = found_hwnds[0][0]
+            print(f"[Le Scaphandre] Fenêtre Dofus trouvée via titre : '{found_hwnds[0][1]}' (HWND: {self.hwnd})")
             return self.hwnd
+
+        self.hwnd = None
         return None
+
+    def is_game_running(self) -> bool:
+        """
+        Vérifie si le client de jeu Dofus Unity est actuellement détecté.
+        """
+        return self.find_window() is not None
 
     def focus_window(self) -> bool:
         """
@@ -57,9 +63,7 @@ class DofusWindowController:
             self.find_window()
 
         if self.hwnd:
-            # ShowWindow SW_RESTORE (9)
-            self.user32.ShowWindow(self.hwnd, 9)
-            # SetForegroundWindow
+            self.user32.ShowWindow(self.hwnd, 9)  # SW_RESTORE (9)
             self.user32.SetForegroundWindow(self.hwnd)
             time.sleep(0.1)
             return True
@@ -105,7 +109,4 @@ class DofusWindowController:
 if __name__ == "__main__":
     controller = DofusWindowController()
     hwnd = controller.find_window()
-    print(f"[Le Scaphandre] Détection fenêtre Dofus HWND: {hwnd}")
-    if hwnd:
-        geom = controller.get_window_geometry()
-        print(f"[Le Scaphandre] Géométrie fenêtre: {geom}")
+    print(f"[Le Scaphandre] Statut détection Dofus HWND: {hwnd} | En cours: {controller.is_game_running()}")
