@@ -6,12 +6,14 @@
 mod fsm;
 mod hotkeys;
 mod ipc;
+mod window_state;
 
 use fsm::{MapInfo, StateMachine, SupervisorState};
 use hotkeys::{DirectionKey, HotkeyManager};
 use ipc::{AgentIPCBridge, IPCMessage};
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{Manager, State, WindowEvent};
+use window_state::WindowStateStore;
 
 struct AppState {
     fsm: StateMachine,
@@ -97,6 +99,17 @@ fn main() {
 
     tauri::Builder::default()
         .manage(Mutex::new(app_state))
+        .setup(|app| {
+            if let Some(main_window) = app.get_window("main") {
+                WindowStateStore::apply_to_window(&main_window);
+            }
+            Ok(())
+        })
+        .on_window_event(|event| {
+            if let WindowEvent::Resized(_) | WindowEvent::Moved(_) = event.event() {
+                WindowStateStore::update_from_window(event.window());
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             get_supervisor_state,
             set_supervisor_state,
