@@ -1,0 +1,18 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Rust / Tauri
+src-tauri/target/
+
+# Database generated instances
+data/databases/*.db
+!data/databases/schema.sql
+
+# Config local vault & logs
+config/.env
+config/routes/*.json
+config/tactics/*.json
+logs/*.log
+logs/vision_errors/*.png
