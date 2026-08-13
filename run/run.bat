@@ -10,11 +10,11 @@ echo.
 
 REM 1. Verification de Python
 py --version >nul 2>&1
-if %ERRORLEVEL% EQU 0 (
+if !ERRORLEVEL! EQU 0 (
     set "PY_CMD=py"
 ) else (
     python --version >nul 2>&1
-    if %ERRORLEVEL% EQU 0 (
+    if !ERRORLEVEL! EQU 0 (
         set "PY_CMD=python"
     ) else (
         echo [ERREUR] Python n'est pas installe ou n'est pas accessible dans le PATH.
@@ -55,32 +55,45 @@ echo   [4] Quitter
 echo ====================================================================
 echo.
 
-set "choice=1"
-set /p choice="Faites votre choix [1-4] (Defaut: 1) : "
+set "user_choice=1"
+set /p user_choice="Faites votre choix [1-4] (Defaut: 1) : "
 
-if "%choice%"=="1" (
-    echo [*] Lancement du Superviseur Tauri...
-    cd /d "%PROJECT_ROOT%\src-tauri"
-    cargo run
-) else if "%choice%"=="2" (
-    echo [*] Lancement du test du harnais agentique...
-    cd /d "%PROJECT_ROOT%"
-    python agents\brain\pathfinding.py
-    python agents\motor\bezier_mouse.py
-    pause
-) else if "%choice%"=="3" (
-    echo [*] Execution des tests unitaires Python (pytest)...
-    cd /d "%PROJECT_ROOT%"
-    python -m pytest tests/
-    echo.
-    echo [*] Execution des tests unitaires Rust (cargo test)...
-    cd /d "%PROJECT_ROOT%\src-tauri"
-    cargo test
-    pause
-) else (
-    echo Fermeture...
-)
+if "!user_choice!"=="1" goto option_1
+if "!user_choice!"=="2" goto option_2
+if "!user_choice!"=="3" goto option_3
+if "!user_choice!"=="4" goto option_exit
+goto option_1
 
+:option_1
+echo [*] Nettoyage des anciennes instances d'IdleD...
+taskkill /F /IM idled-backend.exe >nul 2>&1
+echo [*] Lancement du Superviseur Tauri...
+cd /d "%PROJECT_ROOT%\src-tauri"
+call cargo run
+pause
+goto :eof
+
+:option_2
+echo [*] Lancement du test du harnais agentique...
+cd /d "%PROJECT_ROOT%"
+python agents\brain\pathfinding.py
+python agents\motor\bezier_mouse.py
+pause
+goto :eof
+
+:option_3
+echo [*] Execution des tests unitaires Python (pytest)...
+cd /d "%PROJECT_ROOT%"
+python -m pytest tests/
+echo.
+echo [*] Execution des tests unitaires Rust (cargo test)...
+cd /d "%PROJECT_ROOT%\src-tauri"
+cargo test
+pause
+goto :eof
+
+:option_exit
+echo Fermeture...
 goto :eof
 
 :init_db
