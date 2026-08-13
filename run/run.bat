@@ -50,11 +50,12 @@ echo.
 echo Options de lancement :
 echo   [1] Demarrer le Superviseur Rust / Tauri (UI Overlay)
 echo   [2] Executer le Harnais Multi-Agents Python en mode Standalone
-echo   [3] Quitter
+echo   [3] Lancer la Suite de Tests Unitaires Complete (pytest + cargo test)
+echo   [4] Quitter
 echo ====================================================================
 echo.
 
-set /p choice="Faites votre choix [1-3] : "
+set /p choice="Faites votre choix [1-4] : "
 
 if "%choice%"=="1" (
     echo [*] Lancement du Superviseur Tauri...
@@ -65,6 +66,15 @@ if "%choice%"=="1" (
     cd /d "%PROJECT_ROOT%"
     python agents\brain\pathfinding.py
     python agents\motor\bezier_mouse.py
+    pause
+) else if "%choice%"=="3" (
+    echo [*] Execution des tests unitaires Python (pytest)...
+    cd /d "%PROJECT_ROOT%"
+    python -m pytest tests/
+    echo.
+    echo [*] Execution des tests unitaires Rust (cargo test)...
+    cd /d "%PROJECT_ROOT%\src-tauri"
+    cargo test
     pause
 ) else (
     echo Fermeture...

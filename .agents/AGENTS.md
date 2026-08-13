@@ -11,3 +11,7 @@
 2. **Offline-First & Security**
    - Aucune dépendance externe ni appel réseau d'API cloud n'est toléré dans le code de production.
    - Les données statiques de jeu résident dans SQLite (`data/databases/encyclopedia.db`).
+
+3. **Obligation de Validation par les Tests Unitaires**
+   - **Règle Stricte de Validation** : Aucune fonctionnalité (feature) ou résolution de bug ne peut être déclarée terminée sans l'exécution et le succès à 100% du harnais de tests unitaires complet (`pytest` pour le harnais Python et `cargo test` pour le backend Rust).
+
