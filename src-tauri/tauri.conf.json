@@ -54,7 +54,7 @@
         "height": 720,
         "resizable": true,
         "title": "IdleD - La Ruche",
-        "width": 200,
+        "width": 320,
         "alwaysOnTop": true,
         "transparent": true,
         "decorations": true
