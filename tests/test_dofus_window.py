@@ -1,0 +1,20 @@
+import os
+import sys
+import pytest
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from agents.motor.dofus_window import DofusWindowController
+
+def test_dofus_window_controller_initialization():
+    controller = DofusWindowController()
+    assert controller.window_title == "Dofus"
+    # test call find_window (returns None if dofus.exe not running, integer handle otherwise)
+    hwnd = controller.find_window()
+    assert hwnd is None or isinstance(hwnd, int)
+
+def test_client_to_screen_fallback():
+    controller = DofusWindowController()
+    coords = controller.client_to_screen(100, 200)
+    # Si dofus n'est pas ouvert, retourne None
+    assert coords is None or isinstance(coords, tuple)
