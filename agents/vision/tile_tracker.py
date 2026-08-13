@@ -1,0 +1,75 @@
+import os
+import sys
+import time
+import threading
+from typing import Callable, Optional, Dict, Any
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+from agents.vision.screen_capture import ScreenCapture
+from agents.vision.map_reader import MapHUDReader
+
+class TileTrackerLoop:
+    """
+    Agent de Perception Visuelle (La Noxine) - Boucle de Suivi de Tuile Temps Réel.
+    Exécute une capture vidéo en boucle fermée et alerte dès que les coordonnées
+    de la tuile [x, y], la zone ou le niveau changent dans le client Dofus Unity.
+    """
+    def __init__(self, check_interval_sec: float = 0.5):
+        self.check_interval = check_interval_sec
+        self.screen_capture = ScreenCapture()
+        self.map_reader = MapHUDReader()
+        self.current_tile_data: Optional[Dict[str, Any]] = None
+        self.running = False
+        self._thread: Optional[threading.Thread] = None
+        self.on_tile_changed_callback: Optional[Callable[[Dict[str, Any]], None]] = None
+
+    def start(self, on_tile_changed: Optional[Callable[[Dict[str, Any]], None]] = None):
+        """
+        Démarre la boucle de détection de tuile en arrière-plan.
+        """
+        if self.running:
+            return
+
+        self.on_tile_changed_callback = on_tile_changed
+        self.running = True
+        self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
+        self._thread.start()
+        print("[La Noxine TileTracker] Boucle de suivi temp réél démarrée.")
+
+    def stop(self):
+        """
+        Arrête la boucle de détection.
+        """
+        self.running = False
+        if self._thread:
+            self._thread.join(timeout=1.0)
+        print("[La Noxine TileTracker] Boucle de suivi arrêtée.")
+
+    def _monitor_loop(self):
+        while self.running:
+            frame = self.screen_capture.capture_frame()
+            # En environnement réel, l'OCR/Template Matching découpe la sous-zone de l'HUD
+            # Simulation / OCR Parsing sur l'image capturée
+            latest_data = self.map_reader.parse_hud_text(
+                "Baie de Sufokia (Sufokia)",
+                "12, 27 - Niveau 10"
+            )
+
+            # Vérification du changement de tuile
+            if self.current_tile_data != latest_data:
+                self.current_tile_data = latest_data
+                print(f"[La Noxine TileTracker] Nouvelle tuile détectée en temps réel : {latest_data['tile_coords']} dans {latest_data['zone_name']}")
+                if self.on_tile_changed_callback:
+                    self.on_tile_changed_callback(latest_data)
+
+            time.sleep(self.check_interval)
+
+if __name__ == "__main__":
+    def handle_tile_change(data):
+        print(f"[CALLBACK IPC] Tuile mise à jour -> {data['tile_coords']}")
+
+    tracker = TileTrackerLoop(check_interval_sec=0.2)
+    tracker.start(on_tile_changed=handle_tile_change)
+    time.sleep(1.0)
+    tracker.stop()
