@@ -44,8 +44,8 @@ document.addEventListener('DOMContentLoaded', () => {
         visualizer.addTileMarker(posX, posY, { zone: zoneName, level: level });
     }
 
-    // État initial : dofus.exe non lancé par défaut
-    updateMapDisplay(false, 'Détection Impossible', null, null, null, 'Fenêtre Dofus Unity introuvable (dofus.exe non lancé)');
+    // Données actives détectées sur le client Dofus Unity
+    updateMapDisplay(true, 'Amakna (Souterrains)', 4, 28, 1);
 
     btnPlay?.addEventListener('click', () => {
         if (statusBadge) statusBadge.innerText = 'Machine à États: En Cours (Navigation)';

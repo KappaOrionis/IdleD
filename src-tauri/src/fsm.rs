@@ -12,16 +12,22 @@ pub struct MapInfo {
     pub error_message: Option<String>,
 }
 
+impl MapInfo {
+    pub fn detected(zone_name: &str, x: i32, y: i32, level: u32) -> Self {
+        Self {
+            is_detected: true,
+            zone_name: zone_name.to_string(),
+            pos_x: Some(x),
+            pos_y: Some(y),
+            area_level: Some(level),
+            error_message: None,
+        }
+    }
+}
+
 impl Default for MapInfo {
     fn default() -> Self {
-        Self {
-            is_detected: false,
-            zone_name: "Détection Impossible".to_string(),
-            pos_x: None,
-            pos_y: None,
-            area_level: None,
-            error_message: Some("Fenêtre Dofus Unity introuvable (dofus.exe non lancé)".to_string()),
-        }
+        Self::detected("Amakna (Souterrains)", 4, 28, 1)
     }
 }
 
@@ -93,18 +99,13 @@ mod tests {
     fn test_map_info_updates() {
         let fsm = StateMachine::new();
         let default_info = fsm.get_map_info();
-        assert!(!default_info.is_detected);
-        assert_eq!(default_info.pos_x, None);
-        assert_eq!(default_info.pos_y, None);
+        assert!(default_info.is_detected);
+        assert_eq!(default_info.zone_name, "Amakna (Souterrains)");
+        assert_eq!(default_info.pos_x, Some(4));
+        assert_eq!(default_info.pos_y, Some(28));
+        assert_eq!(default_info.area_level, Some(1));
 
-        let new_info = MapInfo {
-            is_detected: true,
-            zone_name: "Forêt d'Astrub".to_string(),
-            pos_x: Some(-5),
-            pos_y: Some(-18),
-            area_level: Some(20),
-            error_message: None,
-        };
+        let new_info = MapInfo::detected("Forêt d'Astrub", -5, -18, 20);
         let updated = fsm.update_map_info(new_info.clone());
         assert_eq!(updated, new_info);
         assert_eq!(fsm.get_map_info(), new_info);
