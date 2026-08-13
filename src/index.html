@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IdleD - Overlay de Supervision Multi-Agents</title>
+    <link rel="stylesheet" href="styles/overlay.css">
+</head>
+<body>
+    <div id="app-container">
+        <!-- Barre Supérieure de Supervision -->
+        <header class="top-bar">
+            <div class="brand">
+                <span style="color: var(--accent-gold); font-size: 1.3rem;">◈</span>
+                <span>IdleD Superviseur</span>
+            </div>
+            <div class="status-badge" id="supervisor-status">Machine à États: En Attente (Idle)</div>
+        </header>
+
+        <!-- Zone Principale -->
+        <main class="main-content">
+            <!-- Panneau de Contrôle & Essaim d'Agents -->
+            <aside class="sidebar">
+                <div class="control-panel">
+                    <button class="btn btn-play" id="btn-play">▶ Play</button>
+                    <button class="btn btn-pause" id="btn-pause">⏸ Pause</button>
+                    <button class="btn btn-stop" id="btn-stop">⏹ Stop</button>
+                </div>
+
+                <div class="agent-grid">
+                    <div class="agent-card">
+                        <div class="agent-title">Superviseur (Le Cadran)</div>
+                        <div class="agent-status" id="cadran-status">FSM Active</div>
+                    </div>
+                    <div class="agent-card">
+                        <div class="agent-title">Perception Visuelle (La Noxine)</div>
+                        <div class="agent-status" id="noxine-status">Capture Video / CUDA</div>
+                    </div>
+                    <div class="agent-card">
+                        <div class="agent-title">Agent Tactique (Le Cerveau)</div>
+                        <div class="agent-status" id="cerveau-status">A* Routage & LoS</div>
+                    </div>
+                    <div class="agent-card">
+                        <div class="agent-title">Agent Motrice (Le Scaphandre)</div>
+                        <div class="agent-status" id="scaphandre-status">Courbes de Bézier</div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Rendu Cartographique -->
+            <section id="map-container"></section>
+        </main>
+    </div>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>

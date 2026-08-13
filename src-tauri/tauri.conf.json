@@ -1,0 +1,58 @@
+{
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "devPath": "../src",
+    "distDir": "../src"
+  },
+  "package": {
+    "productName": "IdleD",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": true,
+      "globalShortcut": {
+        "all": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "category": "Utility",
+      "copyright": "",
+      "deb": {
+        "depends": []
+      },
+      "externalBin": [],
+      "icon": [],
+      "identifier": "com.idled.app",
+      "longDescription": "",
+      "macOS": {
+        "frameworks": [],
+        "minimumSystemVersion": ""
+      },
+      "shortDescription": "IdleD Overlay & Agent Orchestrator",
+      "targets": "all",
+      "windows": {
+        "certificateThumbprint": null,
+        "digestAlgorithm": "sha256",
+        "timestampUrl": ""
+      }
+    },
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "fullscreen": false,
+        "height": 720,
+        "resizable": true,
+        "title": "IdleD - La Ruche",
+        "width": 1280,
+        "alwaysOnTop": true,
+        "transparent": true,
+        "decorations": true
+      }
+    ]
+  }
+}

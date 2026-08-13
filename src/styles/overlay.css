@@ -1,0 +1,149 @@
+:root {
+  --bg-dark: rgba(18, 22, 31, 0.85);
+  --bg-panel: rgba(28, 34, 48, 0.9);
+  --accent-gold: #e0a96d;
+  --accent-blue: #3a86ff;
+  --accent-green: #38b000;
+  --accent-red: #d90429;
+  --text-main: #f8f9fa;
+  --text-muted: #a0aab8;
+  --border-glow: rgba(224, 169, 109, 0.3);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  user-select: none;
+}
+
+body {
+  background-color: transparent;
+  color: var(--text-main);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+#app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border: 1px solid var(--border-glow);
+  background: var(--bg-dark);
+  backdrop-filter: blur(12px);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: rgba(10, 14, 23, 0.8);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--accent-gold);
+}
+
+.status-badge {
+  background: rgba(56, 176, 0, 0.2);
+  color: var(--accent-green);
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  border: 1px solid var(--accent-green);
+}
+
+.main-content {
+  display: flex;
+  flex: 1;
+}
+
+.sidebar {
+  width: 300px;
+  background: var(--bg-panel);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.control-panel {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-play {
+  background: var(--accent-green);
+  color: white;
+}
+
+.btn-play:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 0 10px var(--accent-green);
+}
+
+.btn-pause {
+  background: var(--accent-blue);
+  color: white;
+}
+
+.btn-stop {
+  background: var(--accent-red);
+  color: white;
+}
+
+.btn-stop:hover {
+  box-shadow: 0 0 12px var(--accent-red);
+}
+
+.agent-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agent-card {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 10px;
+  border-radius: 6px;
+  border-left: 3px solid var(--accent-gold);
+}
+
+.agent-title {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.agent-status {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+#map-container {
+  flex: 1;
+  background: #0d1117;
+  position: relative;
+}
