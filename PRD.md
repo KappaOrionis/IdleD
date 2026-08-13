@@ -1,21 +1,21 @@
 # Product Requirements Document (PRD) : IdleD
 
 1. Vision et Objectifs de l'Application
-1.1 Description du Produit (Le "Quoi")
-IdleD est une plateforme d'orchestration et de supervision logicielle agissant comme une surcouche (overlay) locale conçue pour le client Dofus Unity. Elle déploie une architecture multi-agents hors-ligne chargée de percevoir l'environnement de jeu, de prendre des décisions de routage ou de combat, et d'exécuter des actions motrices (clics, frappes clavier) directement au niveau du système d'exploitation.
+### 1.1 Description du Produit (Le "Quoi")
+IdleD est une plateforme d'orchestration et de supervision logicielle agissant comme une surcouche (overlay) locale spécialement conçue pour piloter le client **Dofus Unity**. Elle déploie une architecture multi-agents hors-ligne chargée de percevoir l'environnement visuel du jeu, de prendre des décisions de routage ou de combat, et d'exécuter des actions motrices (clics humanisés, frappes clavier) directement au niveau du système d'exploitation.
 
 Le système se comporte comme une interface de commandement déléguée : l'utilisateur définit des objectifs (jalons de progression, circuits de récolte, profils tactiques), et le réseau d'agents autonomes se charge de l'exécution mécanique et visuelle sur la carte du jeu, de manière totalement indépendante de toute infrastructure cloud.
 
 1.2 Objectif Principal (Le "Pourquoi")
-L'objectif d'IdleD est d'automatiser intelligemment les phases de progression répétitives pour maximiser l'efficience des sessions de jeu, tout en garantissant une insaisissabilité maximale face aux systèmes anti-triche.
+L'objectif d'IdleD est d'automatiser intelligemment les phases de progression répétitives sur Dofus Unity pour maximiser l'efficience des sessions de jeu, tout en garantissant une insaisissabilité maximale face aux systèmes anti-triche.
 
 Le projet répond à trois impératifs majeurs :
 
-Délégation Tactique et Logistique : Transformer l'expérience de jeu : l'utilisateur passe du statut d'exécutant manuel (cliqueur) à celui de superviseur stratégique, gérant des flux de récolte et des routines de combat complexes tout en optimisant son temps.
+Délégation Tactique et Logistique : Transformer l'expérience de jeu sur Dofus Unity : l'utilisateur passe du statut d'exécutant manuel (cliqueur) à celui de superviseur stratégique, gérant des flux de récolte et des routines de combat complexes tout en optimisant son temps.
 
 Souveraineté et Sécurité (Offline-First) : Garantir que 100% de la capture vidéo, du traitement de la vision par ordinateur et de la prise de décision tactique s'effectue localement, sans aucune compromission des données ou dépendance à des API externes.
 
-Contrôle Hybride (Human-in-the-Loop) : Maintenir un équilibre parfait entre autonomie et contrôle manuel. L'outil doit permettre à l'utilisateur d'interrompre instantanément l'essaim d'agents ou de reprendre la main sur les déplacements (via les touches directionnelles) sans friction, simulant ainsi l'imprévisibilité et la fluidité d'un véritable comportement humain.
+Contrôle Hybride (Human-in-the-Loop) : Maintenir un équilibre parfait entre autonomie et contrôle manuel. L'outil doit permettre à l'utilisateur d'interrompre instantanément l'essaim d'agents ou de reprendre la main sur les déplacements du personnage sur les tuiles adjacentes (via les touches directionnelles du clavier) sans friction, simulant ainsi l'imprévisibilité et la fluidité d'un véritable comportement humain.
 
 ---
 
@@ -23,14 +23,14 @@ Contrôle Hybride (Human-in-the-Loop) : Maintenir un équilibre parfait entre au
 
 ### 2.1 Interface de Supervision (La Ruche)
 
-* **Overlay "Always-on-top" :** Fenêtre de contrôle réactive superposée au client de jeu.
+* **Overlay "Always-on-top" :** Fenêtre de contrôle réactive superposée au client Dofus Unity.
 * **Tableau de Bord Central :** Affichage de l'état actuel de la machine à états (Navigation, Récolte, Combat, Pause).
 * **Contrôles Globaux et Arrêt d'Urgence :** Boutons d'exécution (Play, Pause, Stop) liés à des raccourcis clavier globaux (Global Hotkeys) pour des interruptions matérielles instantanées.
 
-### 2.2 Navigation et Déplacement Manuel (Nouveau)
+### 2.2 Navigation et Déplacement Manuel par Touches Directionnelles
 
-* **Transition par Flèches Directionnelles :** Capacité d'utiliser les touches directionnelles du clavier (Haut, Bas, Gauche, Droite) pour déclencher instantanément un changement de carte. L'application intercepte la frappe et l'Agent d'Exécution génère un clic humanisé sur le bord d'écran (ou le plot de transition) correspondant à la direction demandée.
-* **Validation Visuelle :** Confirmation par l'agent de la fin du chargement de la tuile de carte avant d'autoriser une nouvelle action ou transition.
+* **Déplacement sur Tuiles Adjacentes par Flèches Directionnelles :** Capacité d'utiliser directement les touches directionnelles du clavier (Flèche Haut, Flèche Bas, Flèche Gauche, Flèche Droite) pour déplacer instantanément le personnage vers la tuile ou la carte adjacente sur Dofus Unity. L'application intercepte la frappe clavier au niveau OS et l'Agent d'Exécution (Le Scaphandre) génère un clic humanisé sur le bord d'écran ou le plot de transition correspondant à la direction demandée.
+* **Validation Visuelle :** Confirmation par l'Agent de Perception (La Noxine) de la fin du chargement de la tuile ou de la carte adjacente avant d'autoriser une nouvelle action ou transition.
 
 ### 2.3 Module de Cartographie Interactive (Map Visualizer)
 
