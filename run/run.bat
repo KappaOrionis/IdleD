@@ -48,14 +48,15 @@ echo ====================================================================
 echo [OK] Environnement IdleD pret.
 echo.
 echo Options de lancement :
-echo   [1] Demarrer le Superviseur Rust / Tauri (UI Overlay)
+echo   [1] Demarrer le Superviseur Rust / Tauri (UI Overlay) [PAR DEFAUT]
 echo   [2] Executer le Harnais Multi-Agents Python en mode Standalone
 echo   [3] Lancer la Suite de Tests Unitaires Complete (pytest + cargo test)
 echo   [4] Quitter
 echo ====================================================================
 echo.
 
-set /p choice="Faites votre choix [1-4] : "
+set "choice=1"
+set /p choice="Faites votre choix [1-4] (Defaut: 1) : "
 
 if "%choice%"=="1" (
     echo [*] Lancement du Superviseur Tauri...

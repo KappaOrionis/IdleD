@@ -46,12 +46,16 @@ if (-not (Test-Path $DbPath)) {
 
 Write-Host ""
 Write-Host "====================================================================" -ForegroundColor Cyan
-Write-Host "  [1] Lancer le Superviseur Rust / Tauri (UI Overlay)" -ForegroundColor White
+Write-Host "  [1] Lancer le Superviseur Rust / Tauri (UI Overlay) [PAR DÉFAUT]" -ForegroundColor White
 Write-Host "  [2] Tester le Harnais Agents Python" -ForegroundColor White
-Write-Host "  [3] Quitter" -ForegroundColor White
+Write-Host "  [3] Lancer la Suite de Tests Unitaires Complète (pytest + cargo test)" -ForegroundColor White
+Write-Host "  [4] Quitter" -ForegroundColor White
 Write-Host "====================================================================" -ForegroundColor Cyan
 
-$Choice = Read-Host "Faites votre choix [1-3]"
+$Choice = Read-Host "Faites votre choix [1-4] (Défaut: 1)"
+if ([string]::IsNullOrWhiteSpace($Choice)) {
+    $Choice = "1"
+}
 
 switch ($Choice) {
     "1" {
@@ -63,6 +67,13 @@ switch ($Choice) {
         Write-Host "[*] Exécution du test des agents..." -ForegroundColor Yellow
         & $VenvPython "$ProjectRoot\agents\brain\pathfinding.py"
         & $VenvPython "$ProjectRoot\agents\motor\bezier_mouse.py"
+    }
+    "3" {
+        Write-Host "[*] Exécution des tests unitaires Python (pytest)..." -ForegroundColor Yellow
+        & $VenvPython -m pytest "$ProjectRoot\tests"
+        Write-Host "[*] Exécution des tests unitaires Rust (cargo test)..." -ForegroundColor Yellow
+        Set-Location "$ProjectRoot\src-tauri"
+        cargo test
     }
     Default {
         Write-Host "Fermeture." -ForegroundColor Gray
