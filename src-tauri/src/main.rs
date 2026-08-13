@@ -9,7 +9,7 @@ mod ipc;
 
 use fsm::{StateMachine, SupervisorState};
 use hotkeys::{DirectionKey, HotkeyManager};
-use ipc::AgentIPCBridge;
+use ipc::{AgentIPCBridge, IPCMessage};
 use std::sync::Mutex;
 use tauri::State;
 
@@ -53,6 +53,21 @@ fn trigger_directional_move(direction: String, state: State<'_, Mutex<AppState>>
     Ok(format!("Transition directionnelle {:?} initiée", direction))
 }
 
+#[tauri::command]
+fn trigger_emergency_stop(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
+    let app = state.lock().unwrap();
+    app.hotkeys.trigger_emergency_stop();
+    let _ = app.fsm.transition_to(SupervisorState::EmergencyStop);
+    Ok("Arrêt d'urgence déclenché".into())
+}
+
+#[tauri::command]
+fn send_ipc_message(agent: String, action: String, payload: serde_json::Value, state: State<'_, Mutex<AppState>>) -> Result<serde_json::Value, String> {
+    let app = state.lock().unwrap();
+    let msg = IPCMessage { agent, action, payload };
+    app.ipc.send_to_agent(msg)
+}
+
 fn main() {
     let app_state = AppState {
         fsm: StateMachine::new(),
@@ -67,7 +82,9 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_supervisor_state,
             set_supervisor_state,
-            trigger_directional_move
+            trigger_directional_move,
+            trigger_emergency_stop,
+            send_ipc_message
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors du lancement de l'application Tauri IdleD");
