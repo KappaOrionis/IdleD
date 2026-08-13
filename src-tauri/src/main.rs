@@ -9,7 +9,7 @@ mod ipc;
 
 use fsm::{StateMachine, SupervisorState};
 use hotkeys::{DirectionKey, HotkeyManager};
-use ipc::{AgentIPCBridge, IPCMessage};
+use ipc::AgentIPCBridge;
 use std::sync::Mutex;
 use tauri::State;
 
