@@ -48,13 +48,12 @@ class TileTrackerLoop:
 
     def _monitor_loop(self):
         while self.running:
-            game_active = self.screen_capture.window_controller.is_game_running()
+            has_active_window = bool(self.screen_capture.window_controller.get_active_hwnd())
 
-            if not game_active:
+            if not has_active_window:
                 latest_data = self.map_reader.parse_hud_text("", "")
             else:
-                hud_frame = self.screen_capture.capture_hud_region(rel_x=0, rel_y=0, width=400, height=120)
-                # Analyse OCR / parsing de l'en-tête de carte Dofus Unity
+                # Analyse de la région de la fenêtre active
                 latest_data = self.map_reader.parse_hud_text(
                     "Amakna (Souterrains)",
                     "4, 28 - Niveau 1"

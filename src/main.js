@@ -1,5 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("[IdleD StreamDeck] Console StreamDeck avec IPC Bridge & Focus Automatique.");
+    console.log("[IdleD StreamDeck] Console StreamDeck initialisée.");
+
+    const CONFIG_STORAGE_KEY = 'idled_streamdeck_config';
 
     // Helper d'appel IPC Tauri sécurisé avec fallback navigateur
     async function invokeTauri(cmd, args = {}) {
@@ -15,11 +17,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Éléments UI Globaux
-    const statusBadge = document.getElementById('supervisor-status');
     const activeScriptLabel = document.getElementById('active-script');
     const lastKeyBadge = document.getElementById('last-key');
     const gridContainer = document.getElementById('streamdeck-grid');
-    const subtitleInfo = document.getElementById('deck-subtitle-info');
+    const previewWindowTitle = document.getElementById('preview-window-title');
 
     // Infos Tuile
     const mapZoneName = document.getElementById('map-zone-name');
@@ -32,12 +33,42 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnSaveConfig = document.getElementById('btn-save-config');
     const inputRows = document.getElementById('input-rows');
     const inputCols = document.getElementById('input-cols');
+    const inputBtnWidth = document.getElementById('input-btn-width');
+    const inputBtnHeight = document.getElementById('input-btn-height');
 
-    // Dimensions de la grille par défaut (2 lignes x 3 colonnes)
+    // Configuration par défaut mémorisée dans localStorage
     let gridConfig = {
         rows: 2,
-        cols: 3
+        cols: 3,
+        btnWidth: 70,
+        btnHeight: 70
     };
+
+    // Chargement de la configuration mémorisée
+    function loadSavedConfig() {
+        try {
+            const saved = localStorage.getItem(CONFIG_STORAGE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed && typeof parsed === 'object') {
+                    gridConfig.rows = Math.max(1, Math.min(6, parseInt(parsed.rows, 10) || 2));
+                    gridConfig.cols = Math.max(1, Math.min(6, parseInt(parsed.cols, 10) || 3));
+                    gridConfig.btnWidth = Math.max(40, Math.min(250, parseInt(parsed.btnWidth, 10) || 70));
+                    gridConfig.btnHeight = Math.max(40, Math.min(250, parseInt(parsed.btnHeight, 10) || 70));
+                }
+            }
+        } catch (e) {
+            console.warn("[StreamDeck Config] Erreur chargement configuration locale :", e);
+        }
+    }
+
+    function saveConfig() {
+        try {
+            localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(gridConfig));
+        } catch (e) {
+            console.warn("[StreamDeck Config] Erreur sauvegarde configuration locale :", e);
+        }
+    }
 
     // Liste des boutons configurables
     const defaultButtons = [
@@ -45,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
             id: 'btn-config',
             icon: '⚙️',
             label: 'CONFIG',
-            sub: 'Lignes & Colonnes',
+            sub: 'Dimensions',
             shortcut: 'F1',
             action: openConfigModal
         },
@@ -53,7 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
             id: 'btn-salut',
             icon: '💬',
             label: 'SALUT',
-            sub: 'Écris "salut" dans le chat',
+            sub: 'Écrit salut',
             shortcut: 'F2',
             action: sendSalutChat
         },
@@ -61,15 +92,15 @@ document.addEventListener('DOMContentLoaded', () => {
             id: 'btn-travel',
             icon: '🚀',
             label: 'TRAVEL TO',
-            sub: 'Envoie /travel x,y',
+            sub: '/travel 4,28',
             shortcut: 'F3',
             action: sendTravelToChat
         },
         {
             id: 'btn-stop',
             icon: '⏹',
-            label: 'STOP URGENCE',
-            sub: 'Interruption 0ms',
+            label: 'STOP',
+            sub: 'Urgence',
             shortcut: 'F4',
             action: triggerEmergencyStop
         }
@@ -78,6 +109,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function openConfigModal() {
         if (inputRows) inputRows.value = gridConfig.rows;
         if (inputCols) inputCols.value = gridConfig.cols;
+        if (inputBtnWidth) inputBtnWidth.value = gridConfig.btnWidth;
+        if (inputBtnHeight) inputBtnHeight.value = gridConfig.btnHeight;
         configModal?.classList.add('open');
     }
 
@@ -90,13 +123,17 @@ document.addEventListener('DOMContentLoaded', () => {
     btnSaveConfig?.addEventListener('click', () => {
         const rows = parseInt(inputRows.value, 10) || 2;
         const cols = parseInt(inputCols.value, 10) || 3;
+        const width = parseInt(inputBtnWidth.value, 10) || 70;
+        const height = parseInt(inputBtnHeight.value, 10) || 70;
         
         gridConfig.rows = Math.max(1, Math.min(6, rows));
         gridConfig.cols = Math.max(1, Math.min(6, cols));
+        gridConfig.btnWidth = Math.max(40, Math.min(250, width));
+        gridConfig.btnHeight = Math.max(40, Math.min(250, height));
 
+        saveConfig();
         renderGrid();
         closeConfigModal();
-        if (statusBadge) statusBadge.innerText = `Grille réconfigurée: ${gridConfig.rows}x${gridConfig.cols}`;
     });
 
     function triggerPadFeedback(padElement) {
@@ -108,8 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function sendSalutChat() {
-        if (statusBadge) statusBadge.innerText = 'Focus Win32 & Chat: "salut"';
-        if (activeScriptLabel) activeScriptLabel.innerText = 'Écrit: salut';
+        if (activeScriptLabel) activeScriptLabel.innerText = 'salut';
         
         await invokeTauri('send_ipc_message', {
             agent: 'scaphandre',
@@ -121,8 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function sendTravelToChat() {
         const travelCmd = "/travel 4,28";
-        if (statusBadge) statusBadge.innerText = `Focus Win32 & Chat: "${travelCmd}"`;
-        if (activeScriptLabel) activeScriptLabel.innerText = `Écrit: ${travelCmd}`;
+        if (activeScriptLabel) activeScriptLabel.innerText = travelCmd;
         
         await invokeTauri('send_ipc_message', {
             agent: 'scaphandre',
@@ -133,36 +168,38 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function triggerEmergencyStop() {
-        if (statusBadge) statusBadge.innerText = 'FSM: Arrêt Urgence (EmergencyStop)';
-        if (activeScriptLabel) activeScriptLabel.innerText = 'Commande interrompue';
+        if (activeScriptLabel) activeScriptLabel.innerText = 'STOP';
         
         await invokeTauri('trigger_emergency_stop');
         console.log("[StreamDeck IPC -> Le Cadran] Arrêt d'urgence déclenché.");
     }
 
-    // Rendu dynamique de la grille selon rows x cols
+    // Rendu dynamique de la grille selon rows x cols et taille personnalisée des pads (ex: 50x50)
     function renderGrid() {
         if (!gridContainer) return;
         
-        gridContainer.style.gridTemplateRows = `repeat(${gridConfig.rows}, 1fr)`;
-        gridContainer.style.gridTemplateColumns = `repeat(${gridConfig.cols}, 1fr)`;
+        const w = gridConfig.btnWidth;
+        const h = gridConfig.btnHeight;
+
+        gridContainer.style.gridTemplateRows = `repeat(${gridConfig.rows}, ${h}px)`;
+        gridContainer.style.gridTemplateColumns = `repeat(${gridConfig.cols}, ${w}px)`;
 
         gridContainer.innerHTML = '';
         const totalSlots = gridConfig.rows * gridConfig.cols;
 
-        if (subtitleInfo) {
-            subtitleInfo.innerText = `Grille active : ${gridConfig.rows} ligne(s) × ${gridConfig.cols} colonne(s) (${totalSlots} boutons)`;
-        }
+        // Déterminer la taille optimale de la police / icones selon les dimensions px
+        const isMini = (w <= 55 || h <= 55);
+        const isMedium = (w <= 85 || h <= 85);
 
         for (let i = 0; i < totalSlots; i++) {
             const btnData = defaultButtons[i] || {
                 id: `btn-custom-${i+1}`,
                 icon: '➕',
-                label: `SLOT ${i+1}`,
-                sub: 'Libre / Configurable',
+                label: `P${i+1}`,
+                sub: '',
                 shortcut: `F${i+1}`,
                 action: () => {
-                    if (statusBadge) statusBadge.innerText = `Bouton ${i+1} activé`;
+                    if (activeScriptLabel) activeScriptLabel.innerText = `Slot ${i+1} activé`;
                 }
             };
 
@@ -170,12 +207,18 @@ document.addEventListener('DOMContentLoaded', () => {
             pad.className = 'deck-pad';
             pad.id = btnData.id;
             pad.setAttribute('data-key', btnData.shortcut);
+            pad.style.width = `${w}px`;
+            pad.style.height = `${h}px`;
+
+            const iconSize = isMini ? '1rem' : (isMedium ? '1.3rem' : '1.8rem');
+            const labelSize = isMini ? '0.62rem' : (isMedium ? '0.72rem' : '0.85rem');
+            const showSub = !isMini && Boolean(btnData.sub);
 
             pad.innerHTML = `
-                <div class="pad-icon">${btnData.icon}</div>
-                <div class="pad-label">${btnData.label}</div>
-                <div class="pad-sub">${btnData.sub}</div>
-                <kbd class="pad-shortcut">${btnData.shortcut}</kbd>
+                <div class="pad-icon" style="font-size: ${iconSize};">${btnData.icon}</div>
+                <div class="pad-label" style="font-size: ${labelSize};">${btnData.label}</div>
+                ${showSub ? `<div class="pad-sub">${btnData.sub}</div>` : ''}
+                ${!isMini ? `<kbd class="pad-shortcut">${btnData.shortcut}</kbd>` : ''}
             `;
 
             pad.addEventListener('click', () => {
@@ -187,16 +230,39 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Initialisation de la grille
+    // Initialisation
+    loadSavedConfig();
     renderGrid();
+
+    // Éléments du Flux Visuel
+    const streamThumbnailImg = document.getElementById('stream-thumbnail-img');
+
+    // Actualisation périodique du titre et de la vignette de flux visuel
+    async function updateActiveWindowStream() {
+        try {
+            const thumb = await invokeTauri('get_stream_thumbnail');
+            if (thumb) {
+                if (thumb.title && previewWindowTitle) {
+                    previewWindowTitle.innerText = thumb.title;
+                }
+                if (thumb.data_url && streamThumbnailImg) {
+                    streamThumbnailImg.src = thumb.data_url;
+                }
+            }
+        } catch (err) {
+            console.debug("Erreur rafraîchissement flux visuel:", err);
+        }
+    }
+    updateActiveWindowStream();
+    setInterval(updateActiveWindowStream, 400);
 
     // Raccourcis clavier globaux
     window.addEventListener('keydown', (e) => {
         let keyDisplay = e.key;
-        if (e.key === 'ArrowUp') keyDisplay = '↑ Flèche Haut';
-        else if (e.key === 'ArrowDown') keyDisplay = '↓ Flèche Bas';
-        else if (e.key === 'ArrowLeft') keyDisplay = '← Flèche Gauche';
-        else if (e.key === 'ArrowRight') keyDisplay = '→ Flèche Droite';
+        if (e.key === 'ArrowUp') keyDisplay = '↑ Haut';
+        else if (e.key === 'ArrowDown') keyDisplay = '↓ Bas';
+        else if (e.key === 'ArrowLeft') keyDisplay = '← Gauche';
+        else if (e.key === 'ArrowRight') keyDisplay = '→ Droite';
         else if (e.key === ' ') keyDisplay = 'Espace';
 
         if (lastKeyBadge) {

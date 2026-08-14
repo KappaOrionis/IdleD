@@ -3,9 +3,10 @@ from ctypes import wintypes
 import random
 import time
 from typing import Optional, Dict
-from agents.motor.dofus_window import DofusWindowController
+from agents.motor.active_window import ActiveWindowController
+from agents.motor.pid_sim import PIDDeviceIdentity
 
-# DirectInput Hardware Scancodes (Set 1)
+# DirectInput Hardware Scancodes (Set 1 standard physique)
 SCANCODES = {
     'enter': 0x1C,
     '\n': 0x1C,
@@ -31,7 +32,7 @@ SCANCODES = {
     '5': 0x06, '6': 0x07, '7': 0x08, '8': 0x09, '9': 0x0A
 }
 
-# Win32 INPUT Structures for SendInput API
+# Structures Win32 pour l'API SendInput (simulation matérielle réelle niveau OS)
 PUL = ctypes.POINTER(ctypes.c_ulong)
 
 class KeyBdInput(ctypes.Structure):
@@ -80,17 +81,20 @@ KEYEVENTF_UNICODE = 0x0004
 
 class KeyboardSimulator:
     """
-    Agent d'Exécution Motrice (Le Scaphandre) - Saisie Clavier Humanisée & DirectInput / SendInput.
-    Utilise l'API Windows SendInput de bas niveau pour injecter les scancodes matériels directement
-    dans le moteur Unity de Dofus après focus garanti de la fenêtre.
+    Agent d'Exécution Motrice (Le Scaphandre) - Saisie Clavier Matérielle & Périphérique Réel (SendInput).
+    Injecte des événements physiques réels dans la fenêtre active au premier plan avec:
+    - Scancodes matériels directs (Set 1) et support Unicode natif
+    - Délais et temps de maintien distribués selon une Gaussienne (Loi de Fitts / Biomecanique)
+    - Indépendance totale vis-à-vis d'un processus spécifique.
     """
-    def __init__(self, humanize_level: float = 1.0):
+    def __init__(self, humanize_level: float = 1.0, preset_key: str = "logitech_g915_tkl"):
         self.user32 = ctypes.windll.user32
         self.humanize_level = max(0.1, humanize_level)
-        self.window_controller = DofusWindowController()
+        self.active_window = ActiveWindowController()
+        self.device_identity = PIDDeviceIdentity(preset_key)
 
     def _send_hardware_input(self, scancode: int, is_up: bool = False):
-        """Envoie un événement clavier matériel direct via l'API SendInput de Windows."""
+        """Envoie un événement de touche matérielle directe via SendInput OS."""
         flags = KEYEVENTF_SCANCODE
         if is_up:
             flags |= KEYEVENTF_KEYUP
@@ -102,7 +106,7 @@ class KeyboardSimulator:
         self.user32.SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
 
     def _send_unicode_char(self, char: str):
-        """Envoie un caractère Unicode direct via SendInput."""
+        """Envoie un caractère Unicode physique direct via SendInput OS."""
         extra = ctypes.c_ulong(0)
         code = ord(char)
         
@@ -122,7 +126,7 @@ class KeyboardSimulator:
 
     def send_key(self, key_name: str, hold_mean_sec: float = 0.055, hold_dev_sec: float = 0.015):
         """
-        Enfonce et relâche une touche matérielle via Scancode SendInput.
+        Enfonce et relâche une touche matérielle physique (KeyDown -> Sleep -> KeyUp).
         """
         key_lower = key_name.lower()
         scancode = SCANCODES.get(key_lower)
@@ -136,7 +140,7 @@ class KeyboardSimulator:
         # Pression (KeyDown)
         self._send_hardware_input(scancode, is_up=False)
 
-        # Temps de maintien réaliste (Gaussian Hold Time ~55ms)
+        # Temps de maintien réaliste (~55ms)
         hold_time = max(0.025, random.gauss(hold_mean_sec, hold_dev_sec)) / self.humanize_level
         time.sleep(hold_time)
 
@@ -145,7 +149,7 @@ class KeyboardSimulator:
 
     def type_text(self, text: str, interkey_mean_sec: float = 0.065, interkey_dev_sec: float = 0.02):
         """
-        Tape une chaîne de caractères caractère par caractère avec cadence variable humanisée.
+        Tape une chaîne de caractères dans la fenêtre active exactement comme un périphérique matériel.
         """
         for char in text:
             scancode = SCANCODES.get(char.lower())
@@ -157,34 +161,26 @@ class KeyboardSimulator:
             delay = max(0.025, random.gauss(interkey_mean_sec, interkey_dev_sec)) / self.humanize_level
             time.sleep(delay)
 
+    def type_text_into_active_window(self, text: str) -> bool:
+        """
+        Injecte directement le texte dans la fenêtre actuellement active au premier plan (Foreground Window).
+        """
+        title = self.active_window.get_active_window_title()
+        print(f"[Le Scaphandre Keyboard] Injection matérielle de '{text}' dans la fenêtre active ('{title}')...")
+        self.type_text(text)
+        return True
+
     def send_chat_message(self, message: str) -> bool:
         """
-        Garantit le focus de la fenêtre de jeu, ouvre le chat (Entrée), saisit le texte et valide.
+        Envoie un message/commande dans la fenêtre active (Entrée -> Texte -> Entrée).
         """
-        # 1. Focus absolu de la fenêtre Dofus Unity
-        focused = self.window_controller.focus_window()
-        if not focused:
-            print("[Le Scaphandre Keyboard] Avertissement: Impossible de focus Dofus Unity avant la saisie.")
-            return False
-
-        time.sleep(0.12)
-
-        # 2. Ouvrir le chat
-        print(f"[Le Scaphandre Keyboard] Ouverture du chat Dofus pour le message: '{message}'")
         self.send_key('enter')
-        time.sleep(random.uniform(0.15, 0.25))
-
-        # 3. Taper le message
+        time.sleep(random.uniform(0.12, 0.22))
         self.type_text(message)
-        time.sleep(random.uniform(0.1, 0.2))
-
-        # 4. Valider l'envoi
+        time.sleep(random.uniform(0.08, 0.18))
         self.send_key('enter')
-        time.sleep(0.05)
-        print(f"[Le Scaphandre Keyboard] Message '{message}' envoyé avec succès.")
         return True
 
 if __name__ == "__main__":
     kbd = KeyboardSimulator()
-    print("[Le Scaphandre] Test de frappe DirectInput SendInput...")
-    kbd.send_chat_message("salut")
+    print("[Le Scaphandre] Clavier matériel initialisé.")

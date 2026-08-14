@@ -6,14 +6,15 @@
 mod fsm;
 mod hotkeys;
 mod ipc;
+mod stream_capture;
 mod window_state;
 
 use fsm::{MapInfo, StateMachine, SupervisorState};
 use hotkeys::{DirectionKey, HotkeyManager};
 use ipc::{AgentIPCBridge, IPCMessage};
+use stream_capture::{CaptureThumbnail, Win32StreamCapture};
 use std::sync::Mutex;
-use tauri::{Manager, State, WindowEvent};
-use window_state::WindowStateStore;
+use tauri::State;
 
 struct AppState {
     fsm: StateMachine,
@@ -98,6 +99,27 @@ fn send_ipc_message(agent: String, action: String, payload: serde_json::Value, s
     app.ipc.send_to_agent(msg)
 }
 
+#[tauri::command]
+fn get_active_target_window(state: State<'_, Mutex<AppState>>) -> Result<ipc::ActiveWindowInfo, String> {
+    let app = state.lock().unwrap();
+    Ok(app.ipc.get_active_target_window())
+}
+
+#[tauri::command]
+fn get_stream_thumbnail(state: State<'_, Mutex<AppState>>) -> Result<CaptureThumbnail, String> {
+    let app = state.lock().unwrap();
+    let target = app.ipc.get_active_target_window();
+    let data_url = Win32StreamCapture::capture_thumbnail_base64(target.hwnd, 260, 68)
+        .unwrap_or_default();
+    
+    let is_valid = !data_url.is_empty();
+    Ok(CaptureThumbnail {
+        is_valid,
+        title: target.title,
+        data_url,
+    })
+}
+
 fn main() {
     let app_state = AppState {
         fsm: StateMachine::new(),
@@ -109,17 +131,6 @@ fn main() {
 
     tauri::Builder::default()
         .manage(Mutex::new(app_state))
-        .setup(|app| {
-            if let Some(main_window) = app.get_window("main") {
-                WindowStateStore::apply_to_window(&main_window);
-            }
-            Ok(())
-        })
-        .on_window_event(|event| {
-            if let WindowEvent::Resized(_) | WindowEvent::Moved(_) = event.event() {
-                WindowStateStore::update_from_window(event.window());
-            }
-        })
         .invoke_handler(tauri::generate_handler![
             get_supervisor_state,
             set_supervisor_state,
@@ -127,7 +138,9 @@ fn main() {
             update_map_info,
             trigger_directional_move,
             trigger_emergency_stop,
-            send_ipc_message
+            send_ipc_message,
+            get_active_target_window,
+            get_stream_thumbnail
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors du lancement de l'application Tauri IdleD");

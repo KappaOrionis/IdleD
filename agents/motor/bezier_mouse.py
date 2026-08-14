@@ -1,37 +1,96 @@
 import ctypes
+from ctypes import wintypes
 import math
 import random
 import time
 from typing import List, Tuple, Optional
-from agents.motor.dofus_window import DofusWindowController
+from agents.motor.active_window import ActiveWindowController
+from agents.motor.pid_sim import PIDMouseTrajectory, PIDDeviceIdentity
+
+# DirectInput / Win32 Mouse Flags (Périphérique matériel réel)
+MOUSEEVENTF_MOVE = 0x0001
+MOUSEEVENTF_LEFTDOWN = 0x0002
+MOUSEEVENTF_LEFTUP = 0x0004
+MOUSEEVENTF_RIGHTDOWN = 0x0008
+MOUSEEVENTF_RIGHTUP = 0x0010
+MOUSEEVENTF_MIDDLEDOWN = 0x0020
+MOUSEEVENTF_MIDDLEUP = 0x0040
+MOUSEEVENTF_ABSOLUTE = 0x8000
+
+PUL = ctypes.POINTER(ctypes.c_ulong)
+
+class KeyBdInput(ctypes.Structure):
+    _fields_ = [
+        ("wVk", wintypes.WORD),
+        ("wScan", wintypes.WORD),
+        ("dwFlags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", PUL)
+    ]
+
+class HardwareInput(ctypes.Structure):
+    _fields_ = [
+        ("uMsg", wintypes.DWORD),
+        ("wParamL", wintypes.WORD),
+        ("wParamH", wintypes.WORD)
+    ]
+
+class MouseInput(ctypes.Structure):
+    _fields_ = [
+        ("dx", wintypes.LONG),
+        ("dy", wintypes.LONG),
+        ("mouseData", wintypes.DWORD),
+        ("dwFlags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", PUL)
+    ]
+
+class Input_I(ctypes.Union):
+    _fields_ = [
+        ("ki", KeyBdInput),
+        ("mi", MouseInput),
+        ("hi", HardwareInput)
+    ]
+
+class Input(ctypes.Structure):
+    _fields_ = [
+        ("type", wintypes.DWORD),
+        ("ii", Input_I)
+    ]
+
+INPUT_MOUSE = 0
 
 class BezierMouse:
     """
-    Agent d'Exécution Motrice (Le Scaphandre) - Mouvements de Souris Humanisés & Clics Physiques.
-    Génère des courbes de Bézier cubiques non linéaires avec:
-    - Distribution Gaussienne des points de déviation et des délais (Biomecanique)
-    - Modélisation de la vitesse (Loi de Fitts & Ease-In-Out)
-    - Gestion de l'Overshoot et micro-corrections
-    - Temps de maintien de clic réaliste (Click Hold Time)
-    - Injection physique Win32 SendInput / mouse_event
+    Agent d'Exécution Motrice (Le Scaphandre) - Mouvements de Souris Humanisés & Clics Périphériques Réels (SendInput).
+    Génère des mouvements et clics physiques au niveau matériel OS :
+    - Trajectoires dynamiques contrôlées par régulateurs PID (Proportionnel - Intégral - Dérivé)
+    - Simulation d'identité périphérique USB PID/VID (Logitech G Pro)
+    - Injection physique SendInput Win32 simulant un capteur optique réel
+    - Clics avec temps de maintien (Hold Time) gaussien.
     """
-    MOUSEEVENTF_LEFTDOWN = 0x0002
-    MOUSEEVENTF_LEFTUP = 0x0004
-    MOUSEEVENTF_RIGHTDOWN = 0x0008
-    MOUSEEVENTF_RIGHTUP = 0x0010
-
     def __init__(self, speed_factor: float = 1.0):
         self.speed_factor = max(0.1, speed_factor)
         self.user32 = ctypes.windll.user32
-        self.window_controller = DofusWindowController()
+        self.active_window = ActiveWindowController()
+        self.pid_trajectory = PIDMouseTrajectory()
+        self.device_identity = PIDDeviceIdentity()
 
     def get_current_cursor_pos(self) -> Tuple[int, int]:
-        """Obtient la position courante du curseur de la souris à l'écran."""
+        """Obtient la position courante du curseur à l'écran."""
         class POINT(ctypes.Structure):
             _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
         pt = POINT()
         self.user32.GetCursorPos(ctypes.byref(pt))
         return (pt.x, pt.y)
+
+    def _send_mouse_input(self, flags: int, dx: int = 0, dy: int = 0, data: int = 0):
+        """Envoie un événement souris physique via SendInput OS."""
+        extra = ctypes.c_ulong(0)
+        ii_ = Input_I()
+        ii_.mi = MouseInput(dx, dy, data, flags, 0, ctypes.pointer(extra))
+        x = Input(ctypes.c_ulong(INPUT_MOUSE), ii_)
+        self.user32.SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
 
     def _bezier_point(self, p0: Tuple[int, int], p1: Tuple[int, int], p2: Tuple[int, int], p3: Tuple[int, int], t: float) -> Tuple[int, int]:
         x = (1 - t)**3 * p0[0] + 3 * (1 - t)**2 * t * p1[0] + 3 * (1 - t) * t**2 * p2[0] + t**3 * p3[0]
@@ -39,19 +98,14 @@ class BezierMouse:
         return (int(round(x)), int(round(y)))
 
     def generate_trajectory(self, start: Tuple[int, int], end: Tuple[int, int], steps: Optional[int] = None) -> List[Tuple[int, int]]:
-        """
-        Génère une trajectoire de points le long d'une courbe de Bézier réaliste
-        avec vitesse adaptée selon la distance (Loi de Fitts).
-        """
+        """Génère une trajectoire de Bézier réaliste."""
         dx = end[0] - start[0]
         dy = end[1] - start[1]
         distance = math.hypot(dx, dy)
 
-        # Calcul dynamique du nombre d'étapes basé sur la distance
         if steps is None:
             steps = max(15, int(distance / 20))
 
-        # Déviation Gaussienne des points de contrôle
         dev_scale = min(60.0, distance * 0.25)
         offset_x1 = random.gauss(0, dev_scale)
         offset_y1 = random.gauss(0, dev_scale)
@@ -66,12 +120,10 @@ class BezierMouse:
         trajectory = []
         for i in range(steps + 1):
             t = i / steps
-            # Polynôme d'accélération / décélération Ease-in-out
             t_smooth = t * t * (3.0 - 2.0 * t)
             pt = self._bezier_point(p0, p1, p2, p3, t_smooth)
             trajectory.append(pt)
 
-        # Probabilité de micro-dépassement (Overshoot) suivi de correction (15% des cas)
         if distance > 150 and random.random() < 0.15:
             overshoot_x = int(end[0] + random.gauss(0, 3))
             overshoot_y = int(end[1] + random.gauss(0, 3))
@@ -82,68 +134,42 @@ class BezierMouse:
 
     def move_cursor_to(self, target_x: int, target_y: int, start_pos: Optional[Tuple[int, int]] = None):
         """
-        Déplace physiquement le curseur vers les coordonnées absolues cibles.
+        Déplace physiquement le curseur vers les coordonnées cibles via régulateurs PID.
         """
         start = start_pos if start_pos else self.get_current_cursor_pos()
-        points = self.generate_trajectory(start, (target_x, target_y))
+        points = self.pid_trajectory.generate_points(start, (target_x, target_y))
 
         for p in points:
             self.user32.SetCursorPos(p[0], p[1])
-            step_delay = max(0.003, random.gauss(0.008, 0.003)) / self.speed_factor
+            step_delay = max(0.004, random.gauss(0.010, 0.002)) / self.speed_factor
             time.sleep(step_delay)
 
     def click(self, button: str = "left", hold_mean_sec: float = 0.065):
-        """
-        Émet un clic physique avec temps de maintien (Hold Time) distribué selon une Gaussienne.
-        """
-        down_flag = self.MOUSEEVENTF_LEFTDOWN if button == "left" else self.MOUSEEVENTF_RIGHTDOWN
-        up_flag = self.MOUSEEVENTF_LEFTUP if button == "left" else self.MOUSEEVENTF_RIGHTUP
+        """Émet un clic matériel physique SendInput."""
+        down_flag = MOUSEEVENTF_LEFTDOWN if button == "left" else MOUSEEVENTF_RIGHTDOWN
+        up_flag = MOUSEEVENTF_LEFTUP if button == "left" else MOUSEEVENTF_RIGHTUP
 
-        # Mouse Down
-        self.user32.mouse_event(down_flag, 0, 0, 0, 0)
-
-        # Maintien du clic réaliste (~65ms)
+        self._send_mouse_input(down_flag)
         hold_time = max(0.025, random.gauss(hold_mean_sec, 0.015)) / self.speed_factor
         time.sleep(hold_time)
+        self._send_mouse_input(up_flag)
 
-        # Mouse Up
-        self.user32.mouse_event(up_flag, 0, 0, 0, 0)
-
-    def move_and_click_target(self, start: Optional[Tuple[int, int]], target_rel: Tuple[int, int], click_radius: int = 4) -> Tuple[int, int]:
+    def click_in_active_window(self, rel_x: int, rel_y: int, button: str = "left", click_radius: int = 3) -> Optional[Tuple[int, int]]:
         """
-        Active la fenêtre dofus.exe, convertit la coordonnée relative du jeu en coordonnée absolue écran,
-        déplace le curseur via Bézier et exécute un clic humanisé.
+        Convertit la coordonnée relative à la fenêtre active en coordonnée écran, déplace la souris et clique.
         """
-        # Focus préalable de la fenêtre Dofus Unity
-        focused = self.window_controller.focus_window()
-        if not focused:
-            print("[Le Scaphandre] Avertissement: Fenêtre Dofus non ciblée avant exécution.")
+        abs_coords = self.active_window.client_to_screen(rel_x, rel_y)
+        if not abs_coords:
+            abs_coords = (rel_x, rel_y)
 
-        # Conversion en coordonnée écran absolue
-        screen_coords = self.window_controller.client_to_screen(target_rel[0], target_rel[1])
-        target_abs = screen_coords if screen_coords else target_rel
+        target_x = int(abs_coords[0] + random.gauss(0, max(1, click_radius / 2.0)))
+        target_y = int(abs_coords[1] + random.gauss(0, max(1, click_radius / 2.0)))
 
-        # Dispersion gaussienne du clic sur la cible
-        target_x = int(target_abs[0] + random.gauss(0, max(1, click_radius / 2.0)))
-        target_y = int(target_abs[1] + random.gauss(0, max(1, click_radius / 2.0)))
-
-        actual_start = start if start else self.get_current_cursor_pos()
-        self.move_cursor_to(target_x, target_y, start_pos=actual_start)
-
-        # Petite pause pré-clic
-        time.sleep(random.uniform(0.04, 0.12))
-        self.click("left")
-
+        self.move_cursor_to(target_x, target_y)
+        time.sleep(random.uniform(0.04, 0.1))
+        self.click(button)
         return (target_x, target_y)
-
-    def execute_action(self, action_func, *args, **kwargs):
-        """
-        Garantit que la fenêtre Dofus est ciblée/au premier plan avant d'exécuter une action motrice spécifique.
-        """
-        self.window_controller.focus_window()
-        return action_func(*args, **kwargs)
 
 if __name__ == "__main__":
     mouse = BezierMouse()
-    path = mouse.generate_trajectory((100, 100), (500, 400))
-    print(f"[Le Scaphandre] Trajectoire de Bézier humanisée ({len(path)} points).")
+    print("Curseur actuel :", mouse.get_current_cursor_pos())

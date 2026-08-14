@@ -40,35 +40,99 @@ body {
   position: relative;
 }
 
-/* En-tête */
-.top-bar {
+/* En-tête : Titre Fenêtre (Haut) -> Vignette Flux Visuel (Milieu) -> Tuile Info (Bas) */
+.top-bar.stream-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 16px;
-  background: #090c12;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.brand {
-  display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 8px;
+  padding: 8px 12px;
+  background: #090c12;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  width: 100%;
 }
 
-.brand-logo {
-  color: var(--accent-gold);
-  font-size: 1.3rem;
-  text-shadow: 0 0 10px rgba(244, 162, 97, 0.5);
+.active-window-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 19, 28, 0.9);
+  border: 1px solid rgba(0, 180, 216, 0.4);
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.76rem;
+  max-width: 95%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
 }
 
-.brand-title {
+.preview-tag {
+  background: rgba(0, 180, 216, 0.2);
+  color: var(--accent-blue);
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 0.65rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.preview-title {
+  color: var(--text-main);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Vignette Capture Flux Visuel */
+.stream-thumbnail-container {
+  position: relative;
+  width: 100%;
+  max-width: 260px;
+  height: 68px;
+  background: #0b0e14;
+  border: 1px solid rgba(244, 162, 97, 0.4);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6), inset 0 0 10px rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stream-thumbnail-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.stream-live-badge {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  background: rgba(0, 0, 0, 0.75);
+  color: var(--accent-gold);
+  font-size: 0.6rem;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(244, 162, 97, 0.4);
+  display: flex;
+  align-items: center;
+  gap: 4px;
   letter-spacing: 0.5px;
-  background: linear-gradient(90deg, var(--accent-gold), #fff);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+}
+
+.live-dot {
+  color: #2ec4b6;
+  font-size: 0.65rem;
+  animation: pulse-live 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
 }
 
 /* Carte / Badge Information Tuile */
@@ -76,12 +140,12 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(30, 37, 54, 0.8);
+  background: rgba(30, 37, 54, 0.85);
   border: 1px solid var(--border-glow);
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 0.82rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  padding: 3px 12px;
+  border-radius: 16px;
+  font-size: 0.8rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 .tile-icon {
@@ -140,73 +204,88 @@ body {
   gap: 10px;
 }
 
-/* Grille Dynamique */
+/* Grille Dynamique & Centrage */
 .streamdeck-grid.pure-grid {
   display: grid;
-  gap: 14px;
-  flex: 1;
+  gap: 12px;
   width: 100%;
   height: 100%;
+  justify-content: center;
+  align-content: center;
+  justify-items: center;
+  align-items: center;
 }
 
 /* Design Harmonisé pour Tous les Boutons StreamDeck */
 .deck-pad {
   background: var(--bg-deck-pad);
   border: 1px solid var(--border-glow);
-  border-radius: 14px;
-  padding: 16px 12px;
+  border-radius: 12px;
+  padding: 4px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 2px;
   cursor: pointer;
   position: relative;
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  overflow: hidden;
 }
 
 .deck-pad:hover {
   background: var(--bg-deck-pad-hover);
   border-color: var(--accent-gold);
-  transform: translateY(-3px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5), 0 0 15px rgba(244, 162, 97, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 12px rgba(244, 162, 97, 0.35);
 }
 
 .deck-pad:active, .deck-pad.pressed {
-  transform: translateY(2px);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), inset 0 2px 5px rgba(0, 0, 0, 0.7);
+  transform: translateY(1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(0, 0, 0, 0.7);
 }
 
 .pad-icon {
-  font-size: 2rem;
+  font-size: 1.3rem;
   color: var(--accent-gold);
+  line-height: 1;
 }
 
 .pad-label {
-  font-size: 0.9rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
   text-align: center;
   color: var(--text-main);
+  line-height: 1.1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  max-width: 90%;
 }
 
 .pad-sub {
-  font-size: 0.7rem;
+  font-size: 0.62rem;
   color: var(--text-muted);
   text-align: center;
+  line-height: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  max-width: 90%;
 }
 
 .pad-shortcut {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  background: rgba(0, 0, 0, 0.5);
+  top: 2px;
+  right: 2px;
+  background: rgba(0, 0, 0, 0.6);
   color: var(--accent-gold);
   border: 1px solid rgba(244, 162, 97, 0.3);
-  border-radius: 4px;
-  padding: 2px 7px;
-  font-size: 0.7rem;
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 0.55rem;
   font-family: monospace;
   font-weight: bold;
 }
@@ -274,6 +353,15 @@ body {
   gap: 14px;
 }
 
+.form-group-row {
+  display: flex;
+  gap: 12px;
+}
+
+.form-group-row .form-group {
+  flex: 1;
+}
+
 .form-group {
   display: flex;
   flex-direction: column;
@@ -321,47 +409,62 @@ body {
   box-shadow: 0 0 10px var(--accent-gold);
 }
 
-/* Footer Statut */
+/* Footer Statut Ultra-Compact */
 .bottom-status-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 16px;
+  padding: 4px 12px;
   background: #090c12;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  min-height: 26px;
+  overflow: hidden;
 }
 
 .status-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.status-label {
-  color: var(--text-muted);
+.status-action {
+  flex: 1;
+  max-width: 75%;
+}
+
+.status-icon {
+  font-size: 0.8rem;
 }
 
 .status-value.highlight {
   color: var(--accent-gold);
   font-weight: 600;
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .key-badge {
-  background: rgba(0, 180, 216, 0.2);
+  background: rgba(0, 180, 216, 0.15);
   color: var(--accent-blue);
-  border: 1px solid var(--accent-blue);
+  border: 1px solid rgba(0, 180, 216, 0.4);
   border-radius: 4px;
-  padding: 2px 8px;
+  padding: 1px 6px;
   font-family: monospace;
   font-weight: bold;
-  font-size: 0.82rem;
+  font-size: 0.7rem;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .key-badge.pressed {
   background: var(--accent-gold);
   color: #0f131c;
   border-color: var(--accent-gold);
-  box-shadow: 0 0 12px var(--accent-gold);
+  box-shadow: 0 0 8px var(--accent-gold);
 }

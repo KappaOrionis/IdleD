@@ -9,22 +9,26 @@
 </head>
 <body>
     <div id="app-container">
-        <!-- En-tête StreamDeck -->
-        <header class="top-bar">
-            <div class="brand">
-                <span class="brand-logo">◈</span>
+        <!-- En-tête : Titre Fenêtre Active (Haut) -> Vignette Flux Visuel (Milieu) -> Tuile Active (Bas) -->
+        <header class="top-bar stream-header">
+            <!-- 1. Nom de la Fenêtre Active (Au-dessus) -->
+            <div class="active-window-banner" id="active-window-preview" title="Fenêtre Active Actuelle">
+                <span class="preview-tag">👁️ FENÊTRE ACTIVE</span>
+                <span class="preview-title" id="preview-window-title">Détection...</span>
             </div>
 
-            <!-- Carte Info Tuile Rétablie dans l'en-tête -->
+            <!-- 2. Vignette de Capture du Flux Visuel (Entre les deux) -->
+            <div class="stream-thumbnail-container" id="stream-thumbnail-container" title="Flux de Reconnaissance Visuelle (DXGI / OCR Live)">
+                <img id="stream-thumbnail-img" class="stream-thumbnail-img" alt="Capture Flux" src="" />
+                <div class="stream-live-badge"><span class="live-dot">●</span> LIVE FLUX</div>
+            </div>
+
+            <!-- 3. Description de la Tuile Active (En-dessous) -->
             <div class="tile-info-badge" id="tile-info-badge">
                 <span class="tile-icon">🗺️</span>
                 <span class="tile-zone" id="map-zone-name">Amakna (Souterrains)</span>
                 <span class="tile-coords highlight" id="map-coords">[4, 28]</span>
                 <span class="tile-level" id="map-level">Niv. 1</span>
-            </div>
-
-            <div class="top-right-info">
-                <div class="status-badge" id="supervisor-status">Idle</div>
             </div>
         </header>
 
@@ -54,24 +58,31 @@
                         <label for="input-cols">Nombre de colonnes (Columns) :</label>
                         <input type="number" id="input-cols" min="1" max="6" value="3">
                     </div>
+                    <div class="form-group-row">
+                        <div class="form-group">
+                            <label for="input-btn-width">Largeur bouton (px) :</label>
+                            <input type="number" id="input-btn-width" min="40" max="250" value="70">
+                        </div>
+                        <div class="form-group">
+                            <label for="input-btn-height">Hauteur bouton (px) :</label>
+                            <input type="number" id="input-btn-height" min="40" max="250" value="70">
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="modal-btn btn-save" id="btn-save-config">Appliquer les Dimensions</button>
+                    <button class="modal-btn btn-save" id="btn-save-config">Enregistrer & Appliquer</button>
                 </div>
             </div>
         </div>
 
-        <!-- Barre de Statut Inférieure StreamDeck -->
+        <!-- Barre de Statut Inférieure StreamDeck Ultra-Compacte -->
         <footer class="bottom-status-bar">
-            <div class="status-item">
+            <div class="status-item status-action">
                 <span class="status-icon">📜</span>
-                <span class="status-label">Dernière Action Chat :</span>
-                <span class="status-value highlight" id="active-script">Aucune commande envoyée</span>
+                <span class="status-value highlight" id="active-script">—</span>
             </div>
-            <div class="status-item">
-                <span class="status-icon">⌨️</span>
-                <span class="status-label">Raccourci enfoncé :</span>
-                <kbd class="key-badge" id="last-key">Aucune</kbd>
+            <div class="status-item status-key">
+                <kbd class="key-badge" id="last-key">—</kbd>
             </div>
         </footer>
     </div>

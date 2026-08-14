@@ -1,21 +1,18 @@
 import time
-import ctypes
 import numpy as np
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Dict
 from PIL import ImageGrab
-from agents.motor.dofus_window import DofusWindowController
+from agents.motor.active_window import ActiveWindowController
 
 class ScreenCapture:
     """
-    Agent de Perception (La Noxine) - Module de Capture d'Écran DXGI & Windows Win32.
-    Utilise le sous-système DirectX Graphics Infrastructure (DXGI / Desktop Duplication API)
-    pour récupérer les frames et l'état visuel du jeu Dofus Unity en très haute vitesse et faible latence.
+    Agent de Perception (La Noxine) - Module de Capture d'Écran Générique.
+    Capture les frames de la fenêtre active au premier plan (ou de l'écran) en haute vitesse.
     """
-    def __init__(self, target_window_title: str = "Dofus"):
-        self.target_window_title = target_window_title
+    def __init__(self):
         self.cuda_available = False
         self.dxgi_enabled = False
-        self.window_controller = DofusWindowController(target_window_title)
+        self.window_controller = ActiveWindowController()
         self._dxcam_instance = None
         
         self._check_cuda_support()
@@ -31,24 +28,19 @@ class ScreenCapture:
             self.cuda_available = False
 
     def _init_dxgi_engine(self):
-        """
-        Initialise le moteur DXGI Desktop Duplication API via dxcam / win32 si disponible.
-        """
         try:
             import dxcam
             self._dxcam_instance = dxcam.create(output_color="BGR")
             if self._dxcam_instance:
                 self.dxgi_enabled = True
-                print("[La Noxine ScreenCapture] Moteur DXGI Desktop Duplication API initialisé avec succès.")
         except Exception:
             self.dxgi_enabled = False
-            print("[La Noxine ScreenCapture] DXGI natif indisponible, utilisation du sous-système Win32/GDI High-Speed.")
 
     def capture_frame(self) -> np.ndarray:
         """
-        Capture une image de la fenêtre Dofus Unity (ou de l'écran) sous forme de tableau NumPy BGR via DXGI ou GDI.
+        Capture une image de la fenêtre active sous forme de tableau NumPy BGR.
         """
-        geom = self.window_controller.get_window_geometry()
+        geom = self.window_controller.get_active_window_geometry()
 
         # Stratégie 1 : DXGI Desktop Duplication si activé
         if self.dxgi_enabled and self._dxcam_instance:
@@ -63,8 +55,8 @@ class ScreenCapture:
                         if bottom > top and right > left:
                             return frame[top:bottom, left:right]
                     return frame
-            except Exception as e:
-                print(f"[La Noxine DXGI] Erreur de capture DXGI : {e}")
+            except Exception:
+                pass
 
         # Stratégie 2 : Win32 / PIL GDI Fallback
         if geom and geom["width"] > 0 and geom["height"] > 0:
@@ -72,30 +64,19 @@ class ScreenCapture:
             try:
                 img = ImageGrab.grab(bbox=bbox)
                 frame = np.array(img)
-                # Convert RGB (PIL) to BGR (OpenCV)
                 return frame[:, :, ::-1].copy()
-            except Exception as e:
-                print(f"[La Noxine ScreenCapture] Erreur de capture GDI fenêtre : {e}")
+            except Exception:
+                pass
 
-        # Fallback écran principal complet si fenêtre spécifique non capturable
+        # Fallback plein écran
         try:
             img = ImageGrab.grab()
             frame = np.array(img)
             return frame[:, :, ::-1].copy()
         except Exception:
-            return np.zeros((1080, 1920, 3), dtype=np.uint8)
-
-    def capture_hud_region(self, rel_x: int = 0, rel_y: int = 0, width: int = 400, height: int = 120) -> np.ndarray:
-        """
-        Capture spécifiquement le rectangle de l'HUD supérieur gauche de la carte Dofus via DXGI/GDI.
-        """
-        frame = self.capture_frame()
-        if frame.shape[0] >= rel_y + height and frame.shape[1] >= rel_x + width:
-            return frame[rel_y:rel_y+height, rel_x:rel_x+width]
-        return frame
+            return np.zeros((720, 1280, 3), dtype=np.uint8)
 
 if __name__ == "__main__":
     cap = ScreenCapture()
     frame = cap.capture_frame()
-    print(f"[La Noxine ScreenCapture] Capture frame forme : {frame.shape} | DXGI Actif : {cap.dxgi_enabled} | CUDA : {cap.cuda_available}")
-
+    print("ScreenCapture shape:", frame.shape)
