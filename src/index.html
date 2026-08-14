@@ -16,7 +16,7 @@
                 <span class="brand-title">IdleD StreamDeck</span>
             </div>
 
-            <!-- Carte Info Tuile Rétablie -->
+            <!-- Carte Info Tuile Rétablie dans l'en-tête -->
             <div class="tile-info-badge" id="tile-info-badge">
                 <span class="tile-icon">🗺️</span>
                 <span class="tile-zone" id="map-zone-name">Amakna (Souterrains)</span>
@@ -26,9 +26,6 @@
 
             <div class="top-right-info">
                 <div class="status-badge" id="supervisor-status">Idle</div>
-                <button class="focus-btn" id="btn-focus-dofus" title="Focus immédiat sur la fenêtre Dofus Unity">
-                    <span class="btn-icon">🎯</span> Focus Dofus
-                </button>
             </div>
         </header>
 
@@ -37,44 +34,38 @@
             <section class="streamdeck-section pure-deck">
                 <div class="deck-header">
                     <span class="deck-title">CONSOLE DE COMMANDES STREAMDECK</span>
-                    <span class="deck-subtitle">Boutons Macro Chat & Navigation Directe</span>
+                    <span class="deck-subtitle" id="deck-subtitle-info">Grille Dynamique & Focus Automatique</span>
                 </div>
                 
+                <!-- Grille Dynamique de Pads -->
                 <div class="streamdeck-grid pure-grid" id="streamdeck-grid">
-                    <!-- Pad 1 : Salut Chat -->
-                    <button class="deck-pad pad-play" id="pad-salut" data-key="F5">
-                        <div class="pad-icon">💬</div>
-                        <div class="pad-label">SALUT</div>
-                        <div class="pad-sub">Écris "salut" dans le chat</div>
-                        <kbd class="pad-shortcut">F5</kbd>
-                    </button>
-
-                    <!-- Pad 2 : Travel To -->
-                    <button class="deck-pad pad-action" id="pad-travel" data-key="F6">
-                        <div class="pad-icon">🚀</div>
-                        <div class="pad-label">TRAVEL TO</div>
-                        <div class="pad-sub">Envoie /travel x,y</div>
-                        <kbd class="pad-shortcut">F6</kbd>
-                    </button>
-
-                    <!-- Pad 3 : Focus Fenêtre Dofus -->
-                    <button class="deck-pad pad-mode" id="pad-focus" data-key="F7">
-                        <div class="pad-icon">🔍</div>
-                        <div class="pad-label">FOCUS DOFUS</div>
-                        <div class="pad-sub">Win32 DXGI / Foreground</div>
-                        <kbd class="pad-shortcut">F7</kbd>
-                    </button>
-
-                    <!-- Pad 4 : Stop d'Urgence -->
-                    <button class="deck-pad pad-stop" id="pad-stop" data-key="F8">
-                        <div class="pad-icon">⏹</div>
-                        <div class="pad-label">STOP URGENCE</div>
-                        <div class="pad-sub">Interruption 0ms</div>
-                        <kbd class="pad-shortcut">F8</kbd>
-                    </button>
+                    <!-- Généré dynamiquement en JS -->
                 </div>
             </section>
         </main>
+
+        <!-- Modal / Fenêtre de Configuration StreamDeck -->
+        <div class="modal-overlay" id="config-modal">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <span class="modal-title">⚙️ Configuration du StreamDeck</span>
+                    <button class="modal-close" id="btn-close-modal">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="input-rows">Nombre de lignes (Rows) :</label>
+                        <input type="number" id="input-rows" min="1" max="6" value="2">
+                    </div>
+                    <div class="form-group">
+                        <label for="input-cols">Nombre de colonnes (Columns) :</label>
+                        <input type="number" id="input-cols" min="1" max="6" value="3">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="modal-btn btn-save" id="btn-save-config">Appliquer les Dimensions</button>
+                </div>
+            </div>
+        </div>
 
         <!-- Barre de Statut Inférieure StreamDeck -->
         <footer class="bottom-status-bar">
