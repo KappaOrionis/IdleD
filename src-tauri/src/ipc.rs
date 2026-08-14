@@ -20,6 +20,7 @@ pub struct ActiveWindowInfo {
 extern "system" {
     fn GetForegroundWindow() -> isize;
     fn SetForegroundWindow(hwnd: isize) -> i32;
+    fn AllowSetForegroundWindow(dwProcessId: u32) -> i32;
     fn BringWindowToTop(hwnd: isize) -> i32;
     fn ShowWindow(hwnd: isize, nCmdShow: i32) -> i32;
     fn GetWindowTextW(hwnd: isize, lpString: *mut u16, nMaxCount: i32) -> i32;
@@ -27,6 +28,10 @@ extern "system" {
     fn GetWindowThreadProcessId(hwnd: isize, lpdwProcessId: *mut u32) -> u32;
     fn AttachThreadInput(idAttach: u32, idAttachTo: u32, fAttach: i32) -> i32;
     fn SendInput(cInputs: u32, pInputs: *const RawInput, cbSize: i32) -> u32;
+    fn GetWindow(hwnd: isize, uCmd: u32) -> isize;
+    fn IsWindowVisible(hwnd: isize) -> i32;
+    fn VkKeyScanW(ch: u16) -> i16;
+    fn MapVirtualKeyW(uCode: u32, uMapType: u32) -> u32;
 }
 
 #[cfg(target_os = "windows")]
@@ -36,10 +41,12 @@ extern "system" {
     fn GetCurrentProcessId() -> u32;
 }
 
+const GW_HWNDNEXT: u32 = 2;
 const INPUT_KEYBOARD: u32 = 1;
 const KEYEVENTF_KEYUP: u32 = 0x0002;
 const KEYEVENTF_UNICODE: u32 = 0x0004;
 const VK_RETURN: u16 = 0x0D;
+const VK_SHIFT: u16 = 0x10;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -76,42 +83,70 @@ impl AgentIPCBridge {
     pub fn get_active_target_window(&self) -> ActiveWindowInfo {
         #[cfg(target_os = "windows")]
         unsafe {
+            let current_pid = GetCurrentProcessId();
             let fg = GetForegroundWindow();
+            
             if fg != 0 {
                 let mut pid: u32 = 0;
                 GetWindowThreadProcessId(fg, &mut pid);
-                let current_pid = GetCurrentProcessId();
 
-                // Si la fenêtre active n'est pas le processus IdleD lui-même
+                // Si la fenêtre active n'est pas IdleD
                 if pid != current_pid {
                     let len = GetWindowTextLengthW(fg);
-                    let mut buf = vec![0u16; (len + 1) as usize];
-                    let read_len = GetWindowTextW(fg, buf.as_mut_ptr(), len + 1);
-                    let title = if read_len > 0 {
-                        String::from_utf16_lossy(&buf[..read_len as usize])
-                    } else {
-                        "Fenêtre sans titre".to_string()
-                    };
-
-                    let info = ActiveWindowInfo {
-                        hwnd: fg,
-                        title: title.clone(),
-                    };
-                    let mut lock = self.last_target_window.lock().unwrap();
-                    *lock = Some(info.clone());
-                    return info;
+                    if len > 0 {
+                        let mut buf = vec![0u16; (len + 1) as usize];
+                        let read_len = GetWindowTextW(fg, buf.as_mut_ptr(), len + 1);
+                        let title = String::from_utf16_lossy(&buf[..read_len as usize]);
+                        let info = ActiveWindowInfo { hwnd: fg, title };
+                        let mut lock = self.last_target_window.lock().unwrap();
+                        *lock = Some(info.clone());
+                        return info;
+                    }
                 }
+            }
+
+            // Si IdleD a le focus, vérifier si on a déjà une fenêtre mémorisée
+            {
+                let lock = self.last_target_window.lock().unwrap();
+                if let Some(ref saved) = *lock {
+                    if saved.hwnd != 0 && IsWindowVisible(saved.hwnd) != 0 {
+                        return saved.clone();
+                    }
+                }
+            }
+
+            // Fallback : parcourir l'ordre Z des fenêtres pour trouver la première application visible sous IdleD
+            let mut candidate = GetWindow(fg, GW_HWNDNEXT);
+            while candidate != 0 {
+                if IsWindowVisible(candidate) != 0 {
+                    let mut pid: u32 = 0;
+                    GetWindowThreadProcessId(candidate, &mut pid);
+                    if pid != current_pid {
+                        let len = GetWindowTextLengthW(candidate);
+                        if len > 0 {
+                            let mut buf = vec![0u16; (len + 1) as usize];
+                            let read_len = GetWindowTextW(candidate, buf.as_mut_ptr(), len + 1);
+                            let title = String::from_utf16_lossy(&buf[..read_len as usize]);
+                            if !title.is_empty() && title != "Program Manager" && title != "Taskbar" {
+                                let info = ActiveWindowInfo { hwnd: candidate, title };
+                                let mut lock = self.last_target_window.lock().unwrap();
+                                *lock = Some(info.clone());
+                                return info;
+                            }
+                        }
+                    }
+                }
+                candidate = GetWindow(candidate, GW_HWNDNEXT);
             }
         }
 
-        // Si IdleD est au premier plan, retourner la dernière cible mémorisée
         let lock = self.last_target_window.lock().unwrap();
         if let Some(ref saved) = *lock {
             saved.clone()
         } else {
             ActiveWindowInfo {
                 hwnd: 0,
-                title: "Aucune cible active".to_string(),
+                title: "Bureau Windows".to_string(),
             }
         }
     }
@@ -124,17 +159,19 @@ impl AgentIPCBridge {
                 return false;
             }
             let fg = GetForegroundWindow();
-            if fg == target_hwnd {
-                return true;
-            }
 
             let fore_thread = GetWindowThreadProcessId(fg, std::ptr::null_mut());
+            let target_thread = GetWindowThreadProcessId(target_hwnd, std::ptr::null_mut());
             let current_thread = GetCurrentThreadId();
 
             if fore_thread != 0 && fore_thread != current_thread {
                 AttachThreadInput(current_thread, fore_thread, 1);
             }
+            if target_thread != 0 && target_thread != current_thread {
+                AttachThreadInput(current_thread, target_thread, 1);
+            }
 
+            AllowSetForegroundWindow(0xFFFFFFFF);
             ShowWindow(target_hwnd, 9); // SW_RESTORE
             ShowWindow(target_hwnd, 5); // SW_SHOW
             SetForegroundWindow(target_hwnd);
@@ -143,8 +180,11 @@ impl AgentIPCBridge {
             if fore_thread != 0 && fore_thread != current_thread {
                 AttachThreadInput(current_thread, fore_thread, 0);
             }
+            if target_thread != 0 && target_thread != current_thread {
+                AttachThreadInput(current_thread, target_thread, 0);
+            }
 
-            std::thread::sleep(Duration::from_millis(60));
+            std::thread::sleep(Duration::from_millis(90));
             true
         }
         #[cfg(not(target_os = "windows"))]
@@ -154,31 +194,95 @@ impl AgentIPCBridge {
         }
     }
 
-    /// Envoie un caractère Unicode physique via SendInput
-    pub fn send_unicode_char(ch: char) {
+    /// Envoie un caractère physique réaliste (Scancode + Layout clavier avec fallback Unicode)
+    pub fn send_char(ch: char) {
         #[cfg(target_os = "windows")]
         unsafe {
             let code = ch as u16;
-            let input_down = RawInput {
+            let vk_scan = VkKeyScanW(code);
+
+            if vk_scan != -1 {
+                let vk = (vk_scan & 0xFF) as u16;
+                let need_shift = (vk_scan & 0x0100) != 0;
+                let scancode = MapVirtualKeyW(vk as u32, 0) as u16;
+
+                if need_shift {
+                    Self::send_vk_down(VK_SHIFT, 0x2A);
+                    std::thread::sleep(Duration::from_millis(15));
+                }
+
+                Self::send_vk_down(vk, scancode);
+                std::thread::sleep(Duration::from_millis(25));
+                Self::send_vk_up(vk, scancode);
+                std::thread::sleep(Duration::from_millis(20));
+
+                if need_shift {
+                    Self::send_vk_up(VK_SHIFT, 0x2A);
+                    std::thread::sleep(Duration::from_millis(15));
+                }
+            } else {
+                // Fallback direct Unicode
+                let input_down = RawInput {
+                    input_type: INPUT_KEYBOARD,
+                    #[cfg(target_pointer_width = "64")]
+                    _padding: 0,
+                    ki: KeybdInput {
+                        w_vk: 0,
+                        w_scan: code,
+                        dw_flags: KEYEVENTF_UNICODE,
+                        time: 0,
+                        dw_extra_info: 0,
+                    },
+                    _extra_padding: [0; 8],
+                };
+                SendInput(1, &input_down, std::mem::size_of::<RawInput>() as i32);
+                std::thread::sleep(Duration::from_millis(20));
+
+                let mut input_up = input_down;
+                input_up.ki.dw_flags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+                SendInput(1, &input_up, std::mem::size_of::<RawInput>() as i32);
+                std::thread::sleep(Duration::from_millis(25));
+            }
+        }
+    }
+
+    fn send_vk_down(vk: u16, scan: u16) {
+        #[cfg(target_os = "windows")]
+        unsafe {
+            let input = RawInput {
                 input_type: INPUT_KEYBOARD,
                 #[cfg(target_pointer_width = "64")]
                 _padding: 0,
                 ki: KeybdInput {
-                    w_vk: 0,
-                    w_scan: code,
-                    dw_flags: KEYEVENTF_UNICODE,
+                    w_vk: vk,
+                    w_scan: scan,
+                    dw_flags: 0,
                     time: 0,
                     dw_extra_info: 0,
                 },
                 _extra_padding: [0; 8],
             };
-            SendInput(1, &input_down, std::mem::size_of::<RawInput>() as i32);
-            std::thread::sleep(Duration::from_millis(20));
+            SendInput(1, &input, std::mem::size_of::<RawInput>() as i32);
+        }
+    }
 
-            let mut input_up = input_down;
-            input_up.ki.dw_flags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
-            SendInput(1, &input_up, std::mem::size_of::<RawInput>() as i32);
-            std::thread::sleep(Duration::from_millis(30));
+    fn send_vk_up(vk: u16, scan: u16) {
+        #[cfg(target_os = "windows")]
+        unsafe {
+            let input = RawInput {
+                input_type: INPUT_KEYBOARD,
+                #[cfg(target_pointer_width = "64")]
+                _padding: 0,
+                ki: KeybdInput {
+                    w_vk: vk,
+                    w_scan: scan,
+                    dw_flags: KEYEVENTF_KEYUP,
+                    time: 0,
+                    dw_extra_info: 0,
+                },
+                _extra_padding: [0; 8],
+            };
+            SendInput(1, &input, std::mem::size_of::<RawInput>() as i32);
         }
     }
 
@@ -186,26 +290,11 @@ impl AgentIPCBridge {
     pub fn send_vk_key(vk: u16) {
         #[cfg(target_os = "windows")]
         unsafe {
-            let input_down = RawInput {
-                input_type: INPUT_KEYBOARD,
-                #[cfg(target_pointer_width = "64")]
-                _padding: 0,
-                ki: KeybdInput {
-                    w_vk: vk,
-                    w_scan: 0,
-                    dw_flags: 0,
-                    time: 0,
-                    dw_extra_info: 0,
-                },
-                _extra_padding: [0; 8],
-            };
-            SendInput(1, &input_down, std::mem::size_of::<RawInput>() as i32);
+            let scancode = MapVirtualKeyW(vk as u32, 0) as u16;
+            Self::send_vk_down(vk, scancode);
             std::thread::sleep(Duration::from_millis(30));
-
-            let mut input_up = input_down;
-            input_up.ki.dw_flags = KEYEVENTF_KEYUP;
-            SendInput(1, &input_up, std::mem::size_of::<RawInput>() as i32);
-            std::thread::sleep(Duration::from_millis(40));
+            Self::send_vk_up(vk, scancode);
+            std::thread::sleep(Duration::from_millis(35));
         }
     }
 
@@ -218,15 +307,15 @@ impl AgentIPCBridge {
 
         if press_enter {
             Self::send_vk_key(VK_RETURN);
-            std::thread::sleep(Duration::from_millis(50));
+            std::thread::sleep(Duration::from_millis(60));
         }
 
         for ch in text.chars() {
-            Self::send_unicode_char(ch);
+            Self::send_char(ch);
         }
 
         if press_enter {
-            std::thread::sleep(Duration::from_millis(40));
+            std::thread::sleep(Duration::from_millis(50));
             Self::send_vk_key(VK_RETURN);
         }
 

@@ -120,6 +120,12 @@ fn get_stream_thumbnail(state: State<'_, Mutex<AppState>>) -> Result<CaptureThum
     })
 }
 
+#[tauri::command]
+fn adjust_window_size(width: f64, height: f64, window: tauri::Window) -> Result<(), String> {
+    window.set_size(tauri::Size::Logical(tauri::LogicalSize { width, height }))
+        .map_err(|e| e.to_string())
+}
+
 fn main() {
     let app_state = AppState {
         fsm: StateMachine::new(),
@@ -140,7 +146,8 @@ fn main() {
             trigger_emergency_stop,
             send_ipc_message,
             get_active_target_window,
-            get_stream_thumbnail
+            get_stream_thumbnail,
+            adjust_window_size
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors du lancement de l'application Tauri IdleD");

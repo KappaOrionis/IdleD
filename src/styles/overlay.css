@@ -105,6 +105,8 @@ body {
   height: 100%;
   object-fit: cover;
   display: block;
+  background: #0f131c;
+  color: transparent;
 }
 
 .stream-live-badge {

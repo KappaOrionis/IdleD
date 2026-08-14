@@ -3,15 +3,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const CONFIG_STORAGE_KEY = 'idled_streamdeck_config';
 
-    // Helper d'appel IPC Tauri sécurisé avec fallback navigateur
+    // Helper d'appel IPC Tauri sécurisé avec détection universelle
     async function invokeTauri(cmd, args = {}) {
-        if (window.__TAURI__ && window.__TAURI__.invoke) {
-            try {
-                return await window.__TAURI__.invoke(cmd, args);
-            } catch (err) {
-                console.warn(`[Tauri IPC] Commande '${cmd}' :`, err);
-                return null;
+        try {
+            if (window.__TAURI__) {
+                if (typeof window.__TAURI__.invoke === 'function') {
+                    return await window.__TAURI__.invoke(cmd, args);
+                }
+                if (window.__TAURI__.tauri && typeof window.__TAURI__.tauri.invoke === 'function') {
+                    return await window.__TAURI__.tauri.invoke(cmd, args);
+                }
             }
+            if (typeof window.__TAURI_INVOKE__ === 'function') {
+                return await window.__TAURI_INVOKE__(cmd, args);
+            }
+        } catch (err) {
+            console.warn(`[Tauri IPC] Erreur appel '${cmd}':`, err);
         }
         return null;
     }
@@ -227,6 +234,34 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             gridContainer.appendChild(pad);
+        }
+
+        autoAdjustWindowSize();
+    }
+
+    // Calcule et applique automatiquement la taille idéale de la fenêtre Tauri
+    async function autoAdjustWindowSize() {
+        const w = gridConfig.btnWidth;
+        const h = gridConfig.btnHeight;
+        const cols = gridConfig.cols;
+        const rows = gridConfig.rows;
+
+        // Largeur = padding latéral (24px) + boutons + gaps (10px par colonne) + marge de sécurité
+        const gridWidth = (cols * w) + ((cols - 1) * 10) + 32;
+        // Largeur minimale requise pour afficher l'en-tête (bannière active + flux + tuile) proprement
+        const targetWidth = Math.max(280, gridWidth);
+
+        // Hauteur = En-tête (~145px) + grille ((rows * h) + gaps) + footer (~32px) + padding global (~24px) + barre titre (~35px)
+        const gridHeight = (rows * h) + ((rows - 1) * 10);
+        const targetHeight = 145 + gridHeight + 34 + 24 + 35;
+
+        try {
+            await invokeTauri('adjust_window_size', {
+                width: targetWidth,
+                height: targetHeight
+            });
+        } catch (e) {
+            console.debug("Redimensionnement automatique ignoré (hors Tauri):", e);
         }
     }
 

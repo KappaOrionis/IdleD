@@ -10,10 +10,15 @@ pub struct CaptureThumbnail {
 #[cfg(target_os = "windows")]
 #[link(name = "user32")]
 extern "system" {
+    fn GetDesktopWindow() -> isize;
     fn GetDC(hwnd: isize) -> isize;
     fn ReleaseDC(hwnd: isize, hdc: isize) -> i32;
     fn GetClientRect(hwnd: isize, lpRect: *mut RECT) -> i32;
     fn GetWindowRect(hwnd: isize, lpRect: *mut RECT) -> i32;
+    fn GetSystemMetrics(nIndex: i32) -> i32;
+    fn PrintWindow(hwnd: isize, hdcBlt: isize, nFlags: u32) -> i32;
+    fn IsWindowVisible(hwnd: isize) -> i32;
+    fn IsIconic(hwnd: isize) -> i32;
 }
 
 #[cfg(target_os = "windows")]
@@ -31,6 +36,9 @@ extern "system" {
 const SRCCOPY: u32 = 0x00CC0020;
 const DIB_RGB_COLORS: u32 = 0;
 const BI_RGB: u32 = 0;
+const SM_CXSCREEN: i32 = 0;
+const SM_CYSCREEN: i32 = 1;
+const PW_RENDERFULLCONTENT: u32 = 0x00000002;
 
 #[repr(C)]
 struct RECT {
@@ -91,37 +99,57 @@ impl Win32StreamCapture {
         result
     }
 
-    /// Capture la fenêtre cible (ou le bureau) et génère une vignette BMP ultra-rapide encodée en base64
-    pub fn capture_thumbnail_base64(hwnd: isize, thumb_w: i32, thumb_h: i32) -> Option<String> {
+    /// Capture la fenêtre cible (ou le bureau complet) et génère une vignette BMP encodée en base64
+    pub fn capture_thumbnail_base64(target_hwnd: isize, thumb_w: i32, thumb_h: i32) -> Option<String> {
         #[cfg(target_os = "windows")]
         unsafe {
-            let hdc_src = if hwnd != 0 { GetDC(hwnd) } else { GetDC(0) };
+            let actual_hwnd = if target_hwnd != 0 && IsWindowVisible(target_hwnd) != 0 && IsIconic(target_hwnd) == 0 {
+                target_hwnd
+            } else {
+                GetDesktopWindow()
+            };
+
+            let hdc_src = GetDC(actual_hwnd);
             if hdc_src == 0 {
                 return None;
             }
 
             let mut rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-            if hwnd != 0 {
-                GetClientRect(hwnd, &mut rect);
+            if actual_hwnd == GetDesktopWindow() {
+                rect.right = GetSystemMetrics(SM_CXSCREEN);
+                rect.bottom = GetSystemMetrics(SM_CYSCREEN);
             } else {
-                GetWindowRect(0, &mut rect);
+                GetClientRect(actual_hwnd, &mut rect);
+                if rect.right == 0 || rect.bottom == 0 {
+                    GetWindowRect(actual_hwnd, &mut rect);
+                    rect.right = rect.right - rect.left;
+                    rect.bottom = rect.bottom - rect.top;
+                }
             }
 
-            let src_w = (rect.right - rect.left).max(1);
-            let src_h = (rect.bottom - rect.top).max(1);
+            let src_w = (rect.right).max(64);
+            let src_h = (rect.bottom).max(64);
 
             let hdc_mem = CreateCompatibleDC(hdc_src);
             let hbmp = CreateCompatibleBitmap(hdc_src, thumb_w, thumb_h);
             let old_bmp = SelectObject(hdc_mem, hbmp);
 
-            // Redimensionnement matériel direct en StretchBlt
-            StretchBlt(hdc_mem, 0, 0, thumb_w, thumb_h, hdc_src, 0, 0, src_w, src_h, SRCCOPY);
+            // Tenter PrintWindow pour une capture propre avec DWM / GPU Composition
+            let mut print_ok = false;
+            if actual_hwnd != GetDesktopWindow() {
+                print_ok = PrintWindow(actual_hwnd, hdc_mem, PW_RENDERFULLCONTENT) != 0;
+            }
+
+            if !print_ok {
+                // Fallback StretchBlt direct
+                StretchBlt(hdc_mem, 0, 0, thumb_w, thumb_h, hdc_src, 0, 0, src_w, src_h, SRCCOPY);
+            }
 
             let mut bmi = BITMAPINFO {
                 bmi_header: BITMAPINFOHEADER {
                     bi_size: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
                     bi_width: thumb_w,
-                    bi_height: -thumb_h, // top-down
+                    bi_height: -thumb_h, // Top-down
                     bi_planes: 1,
                     bi_bit_count: 24,
                     bi_compression: BI_RGB,
@@ -150,7 +178,7 @@ impl Win32StreamCapture {
             SelectObject(hdc_mem, old_bmp);
             DeleteObject(hbmp);
             DeleteDC(hdc_mem);
-            ReleaseDC(if hwnd != 0 { hwnd } else { 0 }, hdc_src);
+            ReleaseDC(actual_hwnd, hdc_src);
 
             let bmp_data = Self::encode_bmp(thumb_w, thumb_h, &raw_bytes, row_size);
             let b64 = Self::to_base64(&bmp_data);
@@ -158,7 +186,7 @@ impl Win32StreamCapture {
         }
         #[cfg(not(target_os = "windows"))]
         {
-            let _ = (hwnd, thumb_w, thumb_h);
+            let _ = (target_hwnd, thumb_w, thumb_h);
             None
         }
     }
