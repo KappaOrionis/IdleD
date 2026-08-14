@@ -134,29 +134,10 @@ body {
 .streamdeck-section.pure-deck {
   width: 100%;
   background: var(--bg-panel);
-  padding: 16px;
+  padding: 12px 16px 16px 16px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-}
-
-.deck-header {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  text-align: center;
-}
-
-.deck-title {
-  font-size: 0.9rem;
-  font-weight: 800;
-  color: var(--accent-gold);
-  letter-spacing: 2px;
-}
-
-.deck-subtitle {
-  font-size: 0.75rem;
-  color: var(--text-muted);
+  gap: 10px;
 }
 
 /* Grille Dynamique */

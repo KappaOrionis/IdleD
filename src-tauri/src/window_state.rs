@@ -38,10 +38,8 @@ impl WindowStateStore {
                 if let Ok(mut state) = serde_json::from_str::<WindowState>(&content) {
                     // Si les coordonnées sont hors écran / minimisées (-32000 sous Windows) ou trop petites pour le StreamDeck
                     if state.x <= -10000 || state.y <= -10000 || state.width < 500 || state.height < 500 {
-                        println!("[WindowState] Position hors-écran ou dimensions invalides décelées ({:?}), réinitialisation par défaut.", state);
                         state = WindowState::default();
                     }
-                    println!("[WindowState] Dimensions et position chargées : {:?}", state);
                     return state;
                 }
             }
@@ -56,7 +54,6 @@ impl WindowStateStore {
         }
         let json = serde_json::to_string_pretty(state).map_err(|e| e.to_string())?;
         fs::write(&path, json).map_err(|e| e.to_string())?;
-        println!("[WindowState] Dimensions et position sauvegardées : {:?}", state);
         Ok(())
     }
 

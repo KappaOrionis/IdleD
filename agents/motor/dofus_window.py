@@ -33,42 +33,40 @@ class DofusWindowController:
 
     def find_window(self) -> Optional[int]:
         """
-        Recherche le handle HWND de la fenêtre Dofus via plusieurs stratégies Win32 robustes.
+        Recherche le handle HWND de la fenêtre Dofus Unity via EnumDesktopWindows et détection par PID / Titre.
         """
-        # Stratégie 1 : FindWindowW direct avec classe Unity ou titre
-        for kw in TARGET_TITLE_KEYWORDS:
-            h = self.user32.FindWindowW(None, kw)
-            if h != 0:
-                self.hwnd = h
-                return self.hwnd
+        found_hwnds: List[Tuple[int, str, int]] = []
+        user32 = self.user32
+        h_desk = user32.OpenInputDesktop(0, False, 0x01FF) or user32.GetThreadDesktop(self.kernel32.GetCurrentThreadId())
 
-        # Stratégie 2 : Classe UnityWndClass (Client Dofus Unity)
-        h_unity = self.user32.FindWindowW("UnityWndClass", None)
-        if h_unity != 0:
-            self.hwnd = h_unity
-            return self.hwnd
-
-        # Stratégie 3 : Enumération exhaustive Win32
-        found_hwnds: List[Tuple[int, str]] = []
-
-        def enum_windows_callback(h, extra):
-            length = self.user32.GetWindowTextLengthW(h)
+        def enum_desktop_callback(h, extra):
+            # Obtenir le PID associé au HWND
+            pid = ctypes.c_ulong()
+            user32.GetWindowThreadProcessId(h, ctypes.byref(pid))
+            
+            # Obtenir le Titre de la fenêtre
+            length = user32.GetWindowTextLengthW(h)
             if length > 0:
                 buffer = ctypes.create_unicode_buffer(length + 1)
-                self.user32.GetWindowTextW(h, buffer, length + 1)
-                title = buffer.value.lower()
-                if any(kw in title for kw in TARGET_TITLE_KEYWORDS):
-                    found_hwnds.append((h, buffer.value))
+                user32.GetWindowTextW(h, buffer, length + 1)
+                title = buffer.value
+                title_lower = title.lower()
+
+                # Critères Dofus Unity : mot-clé titre ou signature Release de Dofus Unity (ex: "Kometes - ... - Release")
+                if any(kw in title_lower for kw in TARGET_TITLE_KEYWORDS) or "release" in title_lower or "unity" in title_lower:
+                    found_hwnds.append((h, title, pid.value))
             return True
 
-        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_int)
-        self.user32.EnumWindows(WNDENUMPROC(enum_windows_callback), 0)
+        if h_desk:
+            WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+            user32.EnumDesktopWindows(h_desk, WNDENUMPROC(enum_desktop_callback), 0)
 
         if found_hwnds:
             self.hwnd = found_hwnds[0][0]
-            print(f"[Le Scaphandre] Fenêtre Dofus trouvée : '{found_hwnds[0][1]}' (HWND: {self.hwnd})")
+            print(f"[Dofus Window] Fenêtre Dofus détectée : '{found_hwnds[0][1]}' (HWND: {self.hwnd}, PID: {found_hwnds[0][2]})")
             return self.hwnd
 
+        print("[Dofus Window] Aucune fenêtre de jeu Dofus active trouvée sur le bureau.")
         self.hwnd = None
         return None
 
