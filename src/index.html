@@ -15,6 +15,15 @@
                 <span class="brand-logo">◈</span>
                 <span class="brand-title">IdleD StreamDeck</span>
             </div>
+
+            <!-- Carte Info Tuile Rétablie -->
+            <div class="tile-info-badge" id="tile-info-badge">
+                <span class="tile-icon">🗺️</span>
+                <span class="tile-zone" id="map-zone-name">Amakna (Souterrains)</span>
+                <span class="tile-coords highlight" id="map-coords">[4, 28]</span>
+                <span class="tile-level" id="map-level">Niv. 1</span>
+            </div>
+
             <div class="top-right-info">
                 <div class="status-badge" id="supervisor-status">Idle</div>
                 <button class="focus-btn" id="btn-focus-dofus" title="Focus immédiat sur la fenêtre Dofus Unity">
@@ -23,77 +32,45 @@
             </div>
         </header>
 
-        <!-- StreamDeck Pur (Seule Console de Commandes) -->
+        <!-- StreamDeck Pur -->
         <main class="main-content">
             <section class="streamdeck-section pure-deck">
                 <div class="deck-header">
                     <span class="deck-title">CONSOLE DE COMMANDES STREAMDECK</span>
-                    <span class="deck-subtitle">Boutons Configurables & Control Raccourcis Directs</span>
+                    <span class="deck-subtitle">Boutons Macro Chat & Navigation Directe</span>
                 </div>
                 
                 <div class="streamdeck-grid pure-grid" id="streamdeck-grid">
-                    <!-- Pad 1 : Démarrage / Play -->
-                    <button class="deck-pad pad-play" id="pad-play" data-key="F5">
-                        <div class="pad-icon">▶</div>
-                        <div class="pad-label">DÉMARRER</div>
-                        <div class="pad-sub">Auto-Navigation</div>
+                    <!-- Pad 1 : Salut Chat -->
+                    <button class="deck-pad pad-play" id="pad-salut" data-key="F5">
+                        <div class="pad-icon">💬</div>
+                        <div class="pad-label">SALUT</div>
+                        <div class="pad-sub">Écris "salut" dans le chat</div>
                         <kbd class="pad-shortcut">F5</kbd>
                     </button>
 
-                    <!-- Pad 2 : Pause -->
-                    <button class="deck-pad pad-pause" id="pad-pause" data-key="F6">
-                        <div class="pad-icon">⏸</div>
-                        <div class="pad-label">PAUSE</div>
-                        <div class="pad-sub">Suspendre FSM</div>
+                    <!-- Pad 2 : Travel To -->
+                    <button class="deck-pad pad-action" id="pad-travel" data-key="F6">
+                        <div class="pad-icon">🚀</div>
+                        <div class="pad-label">TRAVEL TO</div>
+                        <div class="pad-sub">Envoie /travel x,y</div>
                         <kbd class="pad-shortcut">F6</kbd>
                     </button>
 
-                    <!-- Pad 3 : Arrêt d'urgence -->
-                    <button class="deck-pad pad-stop" id="pad-stop" data-key="F7">
-                        <div class="pad-icon">⏹</div>
-                        <div class="pad-label">STOP URGENCE</div>
-                        <div class="pad-sub">Interruption 0ms</div>
-                        <kbd class="pad-shortcut">F7</kbd>
-                    </button>
-
-                    <!-- Pad 4 : Focus Fenêtre Dofus -->
-                    <button class="deck-pad pad-action" id="pad-focus" data-key="F8">
+                    <!-- Pad 3 : Focus Fenêtre Dofus -->
+                    <button class="deck-pad pad-mode" id="pad-focus" data-key="F7">
                         <div class="pad-icon">🔍</div>
                         <div class="pad-label">FOCUS DOFUS</div>
                         <div class="pad-sub">Win32 DXGI / Foreground</div>
+                        <kbd class="pad-shortcut">F7</kbd>
+                    </button>
+
+                    <!-- Pad 4 : Stop d'Urgence -->
+                    <button class="deck-pad pad-stop" id="pad-stop" data-key="F8">
+                        <div class="pad-icon">⏹</div>
+                        <div class="pad-label">STOP URGENCE</div>
+                        <div class="pad-sub">Interruption 0ms</div>
                         <kbd class="pad-shortcut">F8</kbd>
-                    </button>
-
-                    <!-- Pad 5 : Mode Récolte -->
-                    <button class="deck-pad pad-mode active" id="pad-harvest" data-key="1">
-                        <div class="pad-icon">🌾</div>
-                        <div class="pad-label">RÉCOLTE</div>
-                        <div class="pad-sub">Circuit Astrub</div>
-                        <kbd class="pad-shortcut">1</kbd>
-                    </button>
-
-                    <!-- Pad 6 : Mode Combat -->
-                    <button class="deck-pad pad-mode" id="pad-combat" data-key="2">
-                        <div class="pad-icon">⚔️</div>
-                        <div class="pad-label">COMBAT AUTO</div>
-                        <div class="pad-sub">IA Tactique</div>
-                        <kbd class="pad-shortcut">2</kbd>
-                    </button>
-
-                    <!-- Pad 7 : Routage A* -->
-                    <button class="deck-pad pad-action" id="pad-pathfinding" data-key="3">
-                        <div class="pad-icon">🗺️</div>
-                        <div class="pad-label">ROUTAGE A*</div>
-                        <div class="pad-sub">Calcul de chemin</div>
-                        <kbd class="pad-shortcut">3</kbd>
-                    </button>
-
-                    <!-- Pad 8 : Scan Détections -->
-                    <button class="deck-pad pad-action" id="pad-scan" data-key="4">
-                        <div class="pad-icon">📸</div>
-                        <div class="pad-label">SCAN NOXINE</div>
-                        <div class="pad-sub">DXGI Vision & Tuiles</div>
-                        <kbd class="pad-shortcut">4</kbd>
                     </button>
                 </div>
             </section>
@@ -103,8 +80,8 @@
         <footer class="bottom-status-bar">
             <div class="status-item">
                 <span class="status-icon">📜</span>
-                <span class="status-label">Profil Actif :</span>
-                <span class="status-value highlight" id="active-script">Recolte_Astrub_Circuit.json</span>
+                <span class="status-label">Dernière Action Chat :</span>
+                <span class="status-value highlight" id="active-script">Aucune commande envoyée</span>
             </div>
             <div class="status-item">
                 <span class="status-icon">⌨️</span>

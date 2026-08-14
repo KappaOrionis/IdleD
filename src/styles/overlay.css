@@ -52,22 +52,58 @@ body {
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .brand-logo {
   color: var(--accent-gold);
-  font-size: 1.4rem;
+  font-size: 1.3rem;
   text-shadow: 0 0 10px rgba(244, 162, 97, 0.5);
 }
 
 .brand-title {
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 1rem;
   letter-spacing: 0.5px;
   background: linear-gradient(90deg, var(--accent-gold), #fff);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+/* Carte / Badge Information Tuile dans le Header */
+.tile-info-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(30, 37, 54, 0.8);
+  border: 1px solid var(--border-glow);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.tile-icon {
+  font-size: 0.95rem;
+}
+
+.tile-zone {
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+
+.tile-coords.highlight {
+  font-family: monospace;
+  font-weight: bold;
+  color: var(--accent-blue);
+  background: rgba(0, 180, 216, 0.15);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.tile-level {
+  color: var(--text-muted);
+  font-size: 0.75rem;
 }
 
 .top-right-info {
@@ -115,97 +151,100 @@ body {
   overflow: hidden;
 }
 
-/* StreamDeck Section */
-.streamdeck-section {
-  width: 380px;
+/* StreamDeck Section Pure */
+.streamdeck-section.pure-deck {
+  width: 100%;
   background: var(--bg-panel);
-  padding: 14px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  gap: 18px;
+  justify-content: center;
 }
 
 .deck-header {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
+  text-align: center;
 }
 
 .deck-title {
-  font-size: 0.75rem;
+  font-size: 0.9rem;
   font-weight: 800;
   color: var(--accent-gold);
-  letter-spacing: 1.5px;
+  letter-spacing: 2px;
 }
 
 .deck-subtitle {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 
-.streamdeck-grid {
+.streamdeck-grid.pure-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: 16px;
+  flex: 1;
 }
 
-/* Deck Pad Styling (Boutons StreamDeck) */
+/* Deck Pad Styling */
 .deck-pad {
   background: var(--bg-deck-pad);
   border: 1px solid var(--pad-border);
-  border-radius: 12px;
-  padding: 14px 10px;
+  border-radius: 14px;
+  padding: 20px 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   cursor: pointer;
   position: relative;
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .deck-pad:hover {
   background: var(--bg-deck-pad-hover);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4), 0 0 10px rgba(255, 255, 255, 0.05);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5), 0 0 12px rgba(255, 255, 255, 0.08);
 }
 
 .deck-pad:active, .deck-pad.pressed {
-  transform: translateY(1px);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4), inset 0 2px 4px rgba(0, 0, 0, 0.6);
+  transform: translateY(2px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), inset 0 2px 5px rgba(0, 0, 0, 0.7);
 }
 
 .pad-icon {
-  font-size: 1.5rem;
+  font-size: 2.2rem;
 }
 
 .pad-label {
-  font-size: 0.78rem;
+  font-size: 0.95rem;
   font-weight: 700;
   letter-spacing: 0.5px;
   text-align: center;
 }
 
 .pad-sub {
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
   text-align: center;
 }
 
 .pad-shortcut {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  background: rgba(0, 0, 0, 0.4);
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.5);
   color: var(--text-muted);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 4px;
-  padding: 1px 5px;
-  font-size: 0.62rem;
+  padding: 2px 7px;
+  font-size: 0.7rem;
   font-family: monospace;
+  font-weight: bold;
 }
 
 /* Variations de Boutons StreamDeck */
@@ -217,7 +256,7 @@ body {
 }
 .pad-play:hover {
   border-color: var(--accent-green);
-  box-shadow: 0 0 15px rgba(46, 196, 182, 0.3);
+  box-shadow: 0 0 18px rgba(46, 196, 182, 0.35);
 }
 
 .pad-pause {
@@ -228,7 +267,7 @@ body {
 }
 .pad-pause:hover {
   border-color: var(--accent-blue);
-  box-shadow: 0 0 15px rgba(0, 180, 216, 0.3);
+  box-shadow: 0 0 18px rgba(0, 180, 216, 0.35);
 }
 
 .pad-stop {
@@ -239,7 +278,7 @@ body {
 }
 .pad-stop:hover {
   border-color: var(--accent-red);
-  box-shadow: 0 0 15px rgba(230, 57, 70, 0.3);
+  box-shadow: 0 0 18px rgba(230, 57, 70, 0.35);
 }
 
 .pad-action {
@@ -250,7 +289,7 @@ body {
 }
 .pad-action:hover {
   border-color: var(--accent-gold);
-  box-shadow: 0 0 15px rgba(244, 162, 97, 0.3);
+  box-shadow: 0 0 18px rgba(244, 162, 97, 0.35);
 }
 
 .pad-mode {
@@ -261,128 +300,7 @@ body {
 }
 .pad-mode:hover {
   border-color: var(--accent-purple);
-  box-shadow: 0 0 15px rgba(157, 78, 221, 0.3);
-}
-
-.deck-pad.active {
-  background: rgba(244, 162, 97, 0.15);
-  border-color: var(--accent-gold);
-  box-shadow: 0 0 12px rgba(244, 162, 97, 0.4);
-}
-
-/* Dashboard Section (Cartes & Info) */
-.dashboard-section {
-  width: 300px;
-  background: var(--bg-panel);
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.map-info-card {
-  background: rgba(15, 19, 28, 0.8);
-  border: 1px solid var(--border-glow);
-  border-radius: 10px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.map-info-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  padding-bottom: 6px;
-}
-
-.map-zone-name {
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: var(--accent-gold);
-}
-
-.map-info-details {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.8rem;
-}
-
-.map-detail-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.map-detail-label {
-  color: var(--text-muted);
-}
-
-.map-detail-value.highlight {
-  font-family: monospace;
-  font-weight: bold;
-  color: var(--accent-gold);
-}
-
-.map-level-badge {
-  background: rgba(244, 162, 97, 0.15);
-  color: var(--accent-gold);
-  border: 1px solid var(--accent-gold);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-weight: 600;
-  font-size: 0.75rem;
-}
-
-.map-error-banner {
-  font-size: 0.7rem;
-  color: var(--accent-red);
-  background: rgba(230, 57, 70, 0.15);
-  padding: 4px 6px;
-  border-radius: 4px;
-  border-left: 2px solid var(--accent-red);
-  display: none;
-}
-
-.map-info-card.detection-error .map-error-banner {
-  display: block;
-}
-
-/* Grille Agents */
-.agent-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-}
-
-.agent-card {
-  background: rgba(0, 0, 0, 0.3);
-  padding: 8px;
-  border-radius: 8px;
-  border-left: 3px solid var(--accent-gold);
-}
-
-.agent-title {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-}
-
-.agent-status {
-  font-size: 0.8rem;
-  font-weight: 600;
-  margin-top: 2px;
-  color: var(--text-main);
-}
-
-/* Rendu Map */
-#map-container {
-  flex: 1;
-  background: #0a0d14;
-  position: relative;
+  box-shadow: 0 0 18px rgba(157, 78, 221, 0.35);
 }
 
 /* Footer Statut */
@@ -390,16 +308,16 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 14px;
+  padding: 8px 16px;
   background: #090c12;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
 }
 
 .status-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .status-label {
@@ -419,7 +337,7 @@ body {
   padding: 2px 8px;
   font-family: monospace;
   font-weight: bold;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   transition: all 0.15s ease;
 }
 
@@ -427,5 +345,5 @@ body {
   background: var(--accent-gold);
   color: #0f131c;
   border-color: var(--accent-gold);
-  box-shadow: 0 0 10px var(--accent-gold);
+  box-shadow: 0 0 12px var(--accent-gold);
 }
