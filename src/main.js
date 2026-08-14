@@ -1,22 +1,31 @@
 import { MapVisualizer } from './map_visualizer/map.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("[IdleD UI] Démarrage de l'interface de supervision 'La Ruche'.");
+    console.log("[IdleD StreamDeck] Initialisation de la console de supervision tactile.");
 
-    // Initialisation Moteur Cartographique
+    // Moteur Cartographique
     const visualizer = new MapVisualizer('map-container');
     visualizer.init();
 
-    // Binding des éléments de statut
-    const btnPlay = document.getElementById('btn-play');
-    const btnPause = document.getElementById('btn-pause');
-    const btnStop = document.getElementById('btn-stop');
+    // Éléments UI
     const statusBadge = document.getElementById('supervisor-status');
     const activeScriptLabel = document.getElementById('active-script');
     const lastKeyBadge = document.getElementById('last-key');
+    const btnFocusDofus = document.getElementById('btn-focus-dofus');
 
-    // Éléments de la Carte d'Information Dofus Unity
-    const mapCard = document.querySelector('.map-info-card');
+    // Pads StreamDeck
+    const pads = document.querySelectorAll('.deck-pad');
+    const padPlay = document.getElementById('pad-play');
+    const padPause = document.getElementById('pad-pause');
+    const padStop = document.getElementById('pad-stop');
+    const padFocus = document.getElementById('pad-focus');
+    const padHarvest = document.getElementById('pad-harvest');
+    const padCombat = document.getElementById('pad-combat');
+    const padPathfinding = document.getElementById('pad-pathfinding');
+    const padScan = document.getElementById('pad-scan');
+
+    // Éléments de la Carte Dofus Unity
+    const mapCard = document.getElementById('map-info-card');
     const mapZoneName = document.getElementById('map-zone-name');
     const mapCoords = document.getElementById('map-coords');
     const mapLevel = document.getElementById('map-level');
@@ -25,50 +34,106 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateMapDisplay(isDetected, zoneName, posX, posY, level, errorMsg = null) {
         if (!isDetected) {
             mapCard?.classList.add('detection-error');
-            mapLevel?.classList.add('error');
             if (mapZoneName) mapZoneName.innerText = '⚠️ Détection Impossible';
             if (mapCoords) mapCoords.innerText = '[-- , --]';
-            if (mapLevel) mapLevel.innerText = 'Indisponible';
+            if (mapLevel) mapLevel.innerText = 'N/A';
             if (mapErrorBanner) {
-                mapErrorBanner.innerText = errorMsg || 'Fenêtre Dofus Unity masquée ou en cours de chargement';
+                mapErrorBanner.innerText = errorMsg || 'Fenêtre Dofus Unity introuvable';
             }
-            console.warn(`[La Noxine Signal] Échec de détection : ${errorMsg}`);
             return;
         }
 
         mapCard?.classList.remove('detection-error');
-        mapLevel?.classList.remove('error');
         if (mapZoneName) mapZoneName.innerText = zoneName;
         if (mapCoords) mapCoords.innerText = `[${posX}, ${posY}]`;
         if (mapLevel) mapLevel.innerText = `Niveau ${level}`;
         visualizer.addTileMarker(posX, posY, { zone: zoneName, level: level });
     }
 
-    // Données actives détectées sur le client Dofus Unity
+    // Affichage initial
     updateMapDisplay(true, 'Amakna (Souterrains)', 4, 28, 1);
 
-    btnPlay?.addEventListener('click', () => {
-        if (statusBadge) statusBadge.innerText = 'Machine à États: En Cours (Navigation)';
+    // Fonction d'animation tactile StreamDeck
+    function triggerPadFeedback(padElement) {
+        if (!padElement) return;
+        padElement.classList.add('pressed');
+        setTimeout(() => {
+            padElement.classList.remove('pressed');
+        }, 200);
+    }
+
+    // Action : Focus Fenêtre Dofus Unity
+    function triggerFocusDofus() {
+        if (statusBadge) statusBadge.innerText = 'Action: Win32 Focus Dofus.exe';
+        console.log("[StreamDeck Action] Focus Dofus Unity demandé.");
+        triggerPadFeedback(padFocus);
+    }
+
+    btnFocusDofus?.addEventListener('click', triggerFocusDofus);
+    padFocus?.addEventListener('click', triggerFocusDofus);
+
+    // Action : Play
+    padPlay?.addEventListener('click', () => {
+        if (statusBadge) statusBadge.innerText = 'FSM: En Cours (Navigation)';
         if (activeScriptLabel) activeScriptLabel.innerText = 'Recolte_Astrub_Circuit.json';
-        console.log('[UI Event] Démarrage de la séquence d\'action');
+        triggerPadFeedback(padPlay);
+        console.log("[StreamDeck Action] Séquence démarrée.");
     });
 
-    btnPause?.addEventListener('click', () => {
-        if (statusBadge) statusBadge.innerText = 'Machine à États: En Pause';
+    // Action : Pause
+    padPause?.addEventListener('click', () => {
+        if (statusBadge) statusBadge.innerText = 'FSM: En Pause';
         if (activeScriptLabel) activeScriptLabel.innerText = 'En Pause';
-        console.log('[UI Event] Mise en pause du système');
+        triggerPadFeedback(padPause);
+        console.log("[StreamDeck Action] Séquence en pause.");
     });
 
-    btnStop?.addEventListener('click', () => {
-        if (statusBadge) statusBadge.innerText = 'Machine à États: Arrêt d\'Urgence (EmergencyStop)';
+    // Action : Stop
+    padStop?.addEventListener('click', () => {
+        if (statusBadge) statusBadge.innerText = 'FSM: Arrêt Urgence (EmergencyStop)';
         if (activeScriptLabel) activeScriptLabel.innerText = 'Aucun script (Interrompu)';
-        console.log('[UI Event] Arrêt d\'urgence manuel');
+        triggerPadFeedback(padStop);
+        console.log("[StreamDeck Action] Arrêt d'urgence.");
     });
 
-    // Interception des frappes clavier en temps réel pour affichage dans la barre de statut
+    // Sélection de mode Récolte / Combat
+    padHarvest?.addEventListener('click', () => {
+        padHarvest.classList.add('active');
+        padCombat?.classList.remove('active');
+        if (activeScriptLabel) activeScriptLabel.innerText = 'Recolte_Astrub_Circuit.json';
+        triggerPadFeedback(padHarvest);
+    });
+
+    padCombat?.addEventListener('click', () => {
+        padCombat.classList.add('active');
+        padHarvest?.classList.remove('active');
+        if (activeScriptLabel) activeScriptLabel.innerText = 'Combat_Ia_Tactique.json';
+        triggerPadFeedback(padCombat);
+    });
+
+    padPathfinding?.addEventListener('click', () => {
+        if (statusBadge) statusBadge.innerText = 'Cerveau: Calcul A* exécuté';
+        triggerPadFeedback(padPathfinding);
+    });
+
+    padScan?.addEventListener('click', () => {
+        if (statusBadge) statusBadge.innerText = 'Noxine: Scan visuel CUDA effectué';
+        triggerPadFeedback(padScan);
+    });
+
+    // Binding des Raccourcis Clavier vers le StreamDeck
+    const keyMap = {
+        'F5': padPlay,
+        'F6': padPause,
+        'F7': padStop,
+        'F8': padFocus,
+        '1': padHarvest,
+        '2': padCombat,
+        '3': padPathfinding,
+        '4': padScan
+    };
+
     window.addEventListener('keydown', (e) => {
-        if (!lastKeyBadge) return;
-        
         let keyDisplay = e.key;
         if (e.key === 'ArrowUp') keyDisplay = '↑ Flèche Haut';
         else if (e.key === 'ArrowDown') keyDisplay = '↓ Flèche Bas';
@@ -76,13 +141,16 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (e.key === 'ArrowRight') keyDisplay = '→ Flèche Droite';
         else if (e.key === ' ') keyDisplay = 'Espace';
 
-        lastKeyBadge.innerText = keyDisplay;
-        lastKeyBadge.classList.add('pressed');
+        if (lastKeyBadge) {
+            lastKeyBadge.innerText = keyDisplay;
+            lastKeyBadge.classList.add('pressed');
+            setTimeout(() => lastKeyBadge.classList.remove('pressed'), 300);
+        }
 
-        setTimeout(() => {
-            lastKeyBadge.classList.remove('pressed');
-        }, 300);
-
-        console.log(`[Key Listener] Touche enfoncée: ${e.key}`);
+        const targetPad = keyMap[e.key];
+        if (targetPad) {
+            e.preventDefault();
+            targetPad.click();
+        }
     });
 });

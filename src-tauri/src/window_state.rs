@@ -16,10 +16,10 @@ pub struct WindowState {
 impl Default for WindowState {
     fn default() -> Self {
         Self {
-            x: 100,
-            y: 100,
-            width: 320,
-            height: 720,
+            x: 150,
+            y: 150,
+            width: 780,
+            height: 740,
         }
     }
 }
@@ -35,7 +35,12 @@ impl WindowStateStore {
         let path = Self::config_file_path();
         if path.exists() {
             if let Ok(content) = fs::read_to_string(&path) {
-                if let Ok(state) = serde_json::from_str::<WindowState>(&content) {
+                if let Ok(mut state) = serde_json::from_str::<WindowState>(&content) {
+                    // Si les coordonnées sont hors écran / minimisées (-32000 sous Windows) ou trop petites pour le StreamDeck
+                    if state.x <= -10000 || state.y <= -10000 || state.width < 500 || state.height < 500 {
+                        println!("[WindowState] Position hors-écran ou dimensions invalides décelées ({:?}), réinitialisation par défaut.", state);
+                        state = WindowState::default();
+                    }
                     println!("[WindowState] Dimensions et position chargées : {:?}", state);
                     return state;
                 }
@@ -63,6 +68,10 @@ impl WindowStateStore {
 
     pub fn update_from_window(window: &Window) {
         if let (Ok(pos), Ok(size)) = (window.outer_position(), window.outer_size()) {
+            // Ne pas enregistrer la position si la fenêtre est minimisée dans le Virtual Screen Windows (-32000)
+            if pos.x <= -10000 || pos.y <= -10000 || size.width < 300 || size.height < 300 {
+                return;
+            }
             let state = WindowState {
                 x: pos.x,
                 y: pos.y,
@@ -81,8 +90,8 @@ mod tests {
     #[test]
     fn test_window_state_default() {
         let state = WindowState::default();
-        assert_eq!(state.width, 320);
-        assert_eq!(state.height, 720);
+        assert_eq!(state.width, 780);
+        assert_eq!(state.height, 740);
     }
 
     #[test]

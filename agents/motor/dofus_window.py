@@ -27,13 +27,15 @@ class DofusWindowController:
         found_hwnds: List[Tuple[int, str]] = []
 
         def enum_windows_callback(h, extra):
-            if self.user32.IsWindowVisible(h):
-                length = self.user32.GetWindowTextLengthW(h)
-                if length > 0:
-                    buffer = ctypes.create_unicode_buffer(length + 1)
-                    self.user32.GetWindowTextW(h, buffer, length + 1)
-                    title = buffer.value.lower()
-                    if any(kw in title for kw in TARGET_TITLE_KEYWORDS):
+            # Détecter la fenêtre même si elle est minimisée dans la barre des tâches
+            length = self.user32.GetWindowTextLengthW(h)
+            if length > 0:
+                buffer = ctypes.create_unicode_buffer(length + 1)
+                self.user32.GetWindowTextW(h, buffer, length + 1)
+                title = buffer.value.lower()
+                if any(kw in title for kw in TARGET_TITLE_KEYWORDS):
+                    # Accepter si la fenêtre est soit visible, soit minimisée (IsIconic)
+                    if self.user32.IsWindowVisible(h) or self.user32.IsIconic(h):
                         found_hwnds.append((h, buffer.value))
             return True
 
@@ -57,15 +59,34 @@ class DofusWindowController:
 
     def focus_window(self) -> bool:
         """
-        Restaure et place la fenêtre dofus.exe au premier plan.
+        Restaure et place la fenêtre dofus.exe au premier plan même si elle est réduite/minimisée dans la barre des tâches.
+        Garantit que la fenêtre est ciblée avant toute commande motrice.
         """
         if not self.hwnd:
             self.find_window()
 
         if self.hwnd:
-            self.user32.ShowWindow(self.hwnd, 9)  # SW_RESTORE (9)
-            self.user32.SetForegroundWindow(self.hwnd)
-            time.sleep(0.1)
+            # 1. Vérifier si la fenêtre est réduite/minimisée (IsIconic)
+            if self.user32.IsIconic(self.hwnd):
+                self.user32.OpenIcon(self.hwnd)  # Restaure une fenêtre minimisée
+                self.user32.ShowWindow(self.hwnd, 9)  # SW_RESTORE = 9
+
+            # 2. Assurer la visibilité et l'activation au premier plan (SW_SHOW = 5)
+            self.user32.ShowWindow(self.hwnd, 5)
+
+            # 3. Contourner les restrictions de focus de Windows via AttachThreadInput si besoin
+            fore_thread = self.user32.GetWindowThreadProcessId(self.user32.GetForegroundWindow(), None)
+            app_thread = self.kernel32.GetCurrentThreadId()
+
+            if fore_thread != app_thread:
+                self.user32.AttachThreadInput(fore_thread, app_thread, True)
+                self.user32.SetForegroundWindow(self.hwnd)
+                self.user32.BringWindowToTop(self.hwnd)
+                self.user32.AttachThreadInput(fore_thread, app_thread, False)
+            else:
+                self.user32.SetForegroundWindow(self.hwnd)
+
+            time.sleep(0.08)
             return True
         return False
 

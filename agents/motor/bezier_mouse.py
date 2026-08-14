@@ -49,7 +49,9 @@ class BezierMouse:
         puis déplace la souris le long d'une courbe de Bézier humanisée et clique.
         """
         # Focus de la fenêtre Dofus Unity
-        self.window_controller.focus_window()
+        focused = self.window_controller.focus_window()
+        if not focused:
+            print("[Le Scaphandre] Avertissement: Fenêtre Dofus non ciblée avant exécution.")
 
         # Conversion en coordonnée écran absolue si dofus.exe est ouvert
         screen_coords = self.window_controller.client_to_screen(target_rel[0], target_rel[1])
@@ -65,6 +67,13 @@ class BezierMouse:
 
         time.sleep(random.uniform(0.05, 0.15))
         return (target_x, target_y)
+
+    def execute_action(self, action_func, *args, **kwargs):
+        """
+        Garantit que la fenêtre Dofus est ciblée/au premier plan avant d'exécuter une action motrice spécifique.
+        """
+        self.window_controller.focus_window()
+        return action_func(*args, **kwargs)
 
 if __name__ == "__main__":
     mouse = BezierMouse()

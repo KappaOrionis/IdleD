@@ -3,84 +3,112 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IdleD - Overlay de Supervision Multi-Agents</title>
+    <title>IdleD - Console StreamDeck</title>
     <link rel="icon" type="image/x-icon" href="favicon.ico">
     <link rel="stylesheet" href="styles/overlay.css">
 </head>
 <body>
     <div id="app-container">
-        <!-- Barre Supérieure de Supervision -->
+        <!-- En-tête StreamDeck -->
         <header class="top-bar">
             <div class="brand">
-                <span style="color: var(--accent-gold); font-size: 1.3rem;">◈</span>
-                <span>IdleD Superviseur</span>
+                <span class="brand-logo">◈</span>
+                <span class="brand-title">IdleD StreamDeck</span>
             </div>
-            <div class="status-badge" id="supervisor-status">Machine à États: En Attente (Idle)</div>
+            <div class="top-right-info">
+                <div class="status-badge" id="supervisor-status">Idle</div>
+                <button class="focus-btn" id="btn-focus-dofus" title="Focus immédiat sur la fenêtre Dofus Unity">
+                    <span class="btn-icon">🎯</span> Focus Dofus
+                </button>
+            </div>
         </header>
 
-        <!-- Zone Principale -->
+        <!-- StreamDeck Pur (Seule Console de Commandes) -->
         <main class="main-content">
-            <!-- Panneau de Contrôle & Essaim d'Agents -->
-            <aside class="sidebar">
-                <div class="control-panel">
-                    <button class="btn btn-play" id="btn-play">▶ Play</button>
-                    <button class="btn btn-pause" id="btn-pause">⏸ Pause</button>
-                    <button class="btn btn-stop" id="btn-stop">⏹ Stop</button>
+            <section class="streamdeck-section pure-deck">
+                <div class="deck-header">
+                    <span class="deck-title">CONSOLE DE COMMANDES STREAMDECK</span>
+                    <span class="deck-subtitle">Boutons Configurables & Control Raccourcis Directs</span>
                 </div>
+                
+                <div class="streamdeck-grid pure-grid" id="streamdeck-grid">
+                    <!-- Pad 1 : Démarrage / Play -->
+                    <button class="deck-pad pad-play" id="pad-play" data-key="F5">
+                        <div class="pad-icon">▶</div>
+                        <div class="pad-label">DÉMARRER</div>
+                        <div class="pad-sub">Auto-Navigation</div>
+                        <kbd class="pad-shortcut">F5</kbd>
+                    </button>
 
-                <!-- Carte d'Information Cartographique Détectée (Dofus Unity) -->
-                <div class="map-info-card">
-                    <div class="map-info-header">
-                        <span class="map-icon">🗺️</span>
-                        <span class="map-zone-name" id="map-zone-name">Amakna (Souterrains)</span>
-                    </div>
-                    <div class="map-info-details">
-                        <div class="map-detail-item">
-                            <span class="map-detail-label">Tuile :</span>
-                            <span class="map-detail-value highlight" id="map-coords">[4, 28]</span>
-                        </div>
-                        <div class="map-detail-item">
-                            <span class="map-detail-label">Niveau Zone :</span>
-                            <span class="map-level-badge" id="map-level">Niveau 1</span>
-                        </div>
-                    </div>
-                    <div class="map-error-banner" id="map-error-banner">Fenêtre Dofus Unity introuvable ou masquée</div>
+                    <!-- Pad 2 : Pause -->
+                    <button class="deck-pad pad-pause" id="pad-pause" data-key="F6">
+                        <div class="pad-icon">⏸</div>
+                        <div class="pad-label">PAUSE</div>
+                        <div class="pad-sub">Suspendre FSM</div>
+                        <kbd class="pad-shortcut">F6</kbd>
+                    </button>
+
+                    <!-- Pad 3 : Arrêt d'urgence -->
+                    <button class="deck-pad pad-stop" id="pad-stop" data-key="F7">
+                        <div class="pad-icon">⏹</div>
+                        <div class="pad-label">STOP URGENCE</div>
+                        <div class="pad-sub">Interruption 0ms</div>
+                        <kbd class="pad-shortcut">F7</kbd>
+                    </button>
+
+                    <!-- Pad 4 : Focus Fenêtre Dofus -->
+                    <button class="deck-pad pad-action" id="pad-focus" data-key="F8">
+                        <div class="pad-icon">🔍</div>
+                        <div class="pad-label">FOCUS DOFUS</div>
+                        <div class="pad-sub">Win32 DXGI / Foreground</div>
+                        <kbd class="pad-shortcut">F8</kbd>
+                    </button>
+
+                    <!-- Pad 5 : Mode Récolte -->
+                    <button class="deck-pad pad-mode active" id="pad-harvest" data-key="1">
+                        <div class="pad-icon">🌾</div>
+                        <div class="pad-label">RÉCOLTE</div>
+                        <div class="pad-sub">Circuit Astrub</div>
+                        <kbd class="pad-shortcut">1</kbd>
+                    </button>
+
+                    <!-- Pad 6 : Mode Combat -->
+                    <button class="deck-pad pad-mode" id="pad-combat" data-key="2">
+                        <div class="pad-icon">⚔️</div>
+                        <div class="pad-label">COMBAT AUTO</div>
+                        <div class="pad-sub">IA Tactique</div>
+                        <kbd class="pad-shortcut">2</kbd>
+                    </button>
+
+                    <!-- Pad 7 : Routage A* -->
+                    <button class="deck-pad pad-action" id="pad-pathfinding" data-key="3">
+                        <div class="pad-icon">🗺️</div>
+                        <div class="pad-label">ROUTAGE A*</div>
+                        <div class="pad-sub">Calcul de chemin</div>
+                        <kbd class="pad-shortcut">3</kbd>
+                    </button>
+
+                    <!-- Pad 8 : Scan Détections -->
+                    <button class="deck-pad pad-action" id="pad-scan" data-key="4">
+                        <div class="pad-icon">📸</div>
+                        <div class="pad-label">SCAN NOXINE</div>
+                        <div class="pad-sub">DXGI Vision & Tuiles</div>
+                        <kbd class="pad-shortcut">4</kbd>
+                    </button>
                 </div>
-
-                <div class="agent-grid">
-                    <div class="agent-card">
-                        <div class="agent-title">Superviseur (Le Cadran)</div>
-                        <div class="agent-status" id="cadran-status">FSM Active</div>
-                    </div>
-                    <div class="agent-card">
-                        <div class="agent-title">Perception Visuelle (La Noxine)</div>
-                        <div class="agent-status" id="noxine-status">Capture Video / CUDA</div>
-                    </div>
-                    <div class="agent-card">
-                        <div class="agent-title">Agent Tactique (Le Cerveau)</div>
-                        <div class="agent-status" id="cerveau-status">A* Routage & LoS</div>
-                    </div>
-                    <div class="agent-card">
-                        <div class="agent-title">Agent Motrice (Le Scaphandre)</div>
-                        <div class="agent-status" id="scaphandre-status">Courbes de Bézier</div>
-                    </div>
-                </div>
-            </aside>
-
-            <!-- Rendu Cartographique -->
-            <section id="map-container"></section>
+            </section>
         </main>
 
-        <!-- Barre de Statut Inférieure -->
+        <!-- Barre de Statut Inférieure StreamDeck -->
         <footer class="bottom-status-bar">
             <div class="status-item">
                 <span class="status-icon">📜</span>
-                <span class="status-label">Script en cours :</span>
-                <span class="status-value highlight" id="active-script">Aucun script actif</span>
+                <span class="status-label">Profil Actif :</span>
+                <span class="status-value highlight" id="active-script">Recolte_Astrub_Circuit.json</span>
             </div>
             <div class="status-item">
                 <span class="status-icon">⌨️</span>
-                <span class="status-label">Dernière touche clavier :</span>
+                <span class="status-label">Raccourci enfoncé :</span>
                 <kbd class="key-badge" id="last-key">Aucune</kbd>
             </div>
         </footer>
