@@ -75,6 +75,60 @@
             </div>
         </div>
 
+        <!-- Modal / Fenêtre d'Édition d'un Bouton Individuel -->
+        <div class="modal-overlay" id="button-edit-modal">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <span class="modal-title" id="edit-modal-title">✏️ Éditer le Bouton</span>
+                    <button class="modal-close" id="btn-close-edit-modal">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="edit-btn-icon">Choix de l'Icône :</label>
+                        <div class="icon-picker-container">
+                            <div class="icon-picker-grid" id="icon-picker-grid">
+                                <!-- Grille remplie dynamiquement en JS -->
+                            </div>
+                            <input type="text" id="edit-btn-icon" placeholder="💬" maxlength="4" style="text-align: center; font-size: 1.1rem; width: 100%;">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-btn-label">Titre / Label :</label>
+                        <input type="text" id="edit-btn-label" placeholder="Mon Action">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-btn-sub">Sous-titre / Description :</label>
+                        <input type="text" id="edit-btn-sub" placeholder="Description courte">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-btn-type">Type d'Action :</label>
+                        <select id="edit-btn-type">
+                            <option value="chat">💬 Envoi de message Chat</option>
+                            <option value="travel">🚀 Commande /travel (Déplacement)</option>
+                            <option value="custom">⚡ Commande IPC Personnalisée</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="group-action-value">
+                        <label for="edit-btn-value" id="label-action-value">Message / Paramètre :</label>
+                        <input type="text" id="edit-btn-value" placeholder="ex: salut ou 4,28">
+                    </div>
+                    <div class="form-group form-group-checkbox" id="group-auto-enter">
+                        <label class="checkbox-label" for="edit-btn-auto-enter">
+                            <input type="checkbox" id="edit-btn-auto-enter" checked>
+                            <span>↵ Valider automatiquement par Entrée (Enter)</span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-btn-shortcut">Raccourci Clavier :</label>
+                        <input type="text" id="edit-btn-shortcut" placeholder="ex: F2" maxlength="5">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="modal-btn btn-save" id="btn-save-edit-button">Enregistrer l'Action</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Barre de Statut Inférieure StreamDeck Ultra-Compacte -->
         <footer class="bottom-status-bar">
             <div class="status-item status-action">

@@ -77,7 +77,52 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Liste des boutons configurables
+    const BUTTONS_STORAGE_KEY = 'idled_streamdeck_buttons_config';
+
+    // Modale d'Édition de Bouton
+    const buttonEditModal = document.getElementById('button-edit-modal');
+    const btnCloseEditModal = document.getElementById('btn-close-edit-modal');
+    const btnSaveEditButton = document.getElementById('btn-save-edit-button');
+    const editModalTitle = document.getElementById('edit-modal-title');
+    const editBtnIcon = document.getElementById('edit-btn-icon');
+    const editBtnLabel = document.getElementById('edit-btn-label');
+    const editBtnSub = document.getElementById('edit-btn-sub');
+    const editBtnType = document.getElementById('edit-btn-type');
+    const editBtnValue = document.getElementById('edit-btn-value');
+    const editBtnShortcut = document.getElementById('edit-btn-shortcut');
+
+    const editBtnAutoEnter = document.getElementById('edit-btn-auto-enter');
+    const iconPickerGrid = document.getElementById('icon-picker-grid');
+
+    const PRESET_ICONS = [
+        '💬', '🚀', '⚡', '⚔️', '🛡️', '🌾', '⛏️', '🎣',
+        '❤️', '🎯', '🔥', '💧', '🌿', '✨', '🎁', '🏆',
+        '📢', '🖐️', '👋', '🛑', '🔑', '⭐', '🧪', '📜'
+    ];
+
+    function renderIconPicker(selectedIcon) {
+        if (!iconPickerGrid) return;
+        iconPickerGrid.innerHTML = '';
+
+        PRESET_ICONS.forEach(icon => {
+            const item = document.createElement('div');
+            item.className = 'icon-option';
+            if (icon === selectedIcon) item.classList.add('selected');
+            item.innerText = icon;
+
+            item.addEventListener('click', () => {
+                if (editBtnIcon) editBtnIcon.value = icon;
+                iconPickerGrid.querySelectorAll('.icon-option').forEach(el => el.classList.remove('selected'));
+                item.classList.add('selected');
+            });
+
+            iconPickerGrid.appendChild(item);
+        });
+    }
+
+    let currentEditingSlotIndex = null;
+
+    // Configuration des boutons par défaut
     const defaultButtons = [
         {
             id: 'btn-config',
@@ -85,7 +130,9 @@ document.addEventListener('DOMContentLoaded', () => {
             label: 'CONFIG',
             sub: 'Dimensions',
             shortcut: 'F1',
-            action: openConfigModal
+            type: 'config',
+            value: '',
+            autoEnter: true
         },
         {
             id: 'btn-salut',
@@ -93,7 +140,9 @@ document.addEventListener('DOMContentLoaded', () => {
             label: 'SALUT',
             sub: 'Écrit salut',
             shortcut: 'F2',
-            action: sendSalutChat
+            type: 'chat',
+            value: 'salut',
+            autoEnter: true
         },
         {
             id: 'btn-travel',
@@ -101,17 +150,41 @@ document.addEventListener('DOMContentLoaded', () => {
             label: 'TRAVEL TO',
             sub: '/travel 4,28',
             shortcut: 'F3',
-            action: sendTravelToChat
-        },
-        {
-            id: 'btn-stop',
-            icon: '⏹',
-            label: 'STOP',
-            sub: 'Urgence',
-            shortcut: 'F4',
-            action: triggerEmergencyStop
+            type: 'travel',
+            value: '4,28',
+            autoEnter: true
         }
     ];
+
+    let customButtonsConfig = {};
+
+    function loadSavedButtonsConfig() {
+        try {
+            const saved = localStorage.getItem(BUTTONS_STORAGE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed && typeof parsed === 'object') {
+                    // Nettoyer les anciennes configurations qui auraient sauvegardé un bouton STOP sur un slot intermédiaire
+                    Object.keys(parsed).forEach(slotIdx => {
+                        if (parsed[slotIdx] && (parsed[slotIdx].type === 'stop' || parsed[slotIdx].label === 'STOP')) {
+                            delete parsed[slotIdx];
+                        }
+                    });
+                    customButtonsConfig = parsed;
+                }
+            }
+        } catch (e) {
+            console.warn("[StreamDeck Buttons] Erreur chargement boutons persistant :", e);
+        }
+    }
+
+    function saveButtonsConfig() {
+        try {
+            localStorage.setItem(BUTTONS_STORAGE_KEY, JSON.stringify(customButtonsConfig));
+        } catch (e) {
+            console.warn("[StreamDeck Buttons] Erreur sauvegarde boutons persistant :", e);
+        }
+    }
 
     function openConfigModal() {
         if (inputRows) inputRows.value = gridConfig.rows;
@@ -143,6 +216,65 @@ document.addEventListener('DOMContentLoaded', () => {
         closeConfigModal();
     });
 
+    // Ouverture et enregistrement du Modal d'Édition de Bouton
+    function openButtonEditModal(slotIndex, btnData) {
+        const isConfigBtn = (slotIndex === 0 || btnData.id === 'btn-config' || btnData.type === 'config');
+        const isStopBtn = (slotIndex === 1 || btnData.id === 'btn-stop' || btnData.type === 'stop');
+
+        if (isConfigBtn || isStopBtn) {
+            console.log(`[StreamDeck] Le bouton ${isConfigBtn ? 'CONFIG' : 'STOP'} est verrouillé et ne peut pas être modifié.`);
+            return;
+        }
+
+        currentEditingSlotIndex = slotIndex;
+        if (editModalTitle) editModalTitle.innerText = `✏️ Éditer le Bouton Slot ${slotIndex + 1}`;
+        if (editBtnIcon) editBtnIcon.value = btnData.icon || '💬';
+        renderIconPicker(btnData.icon || '💬');
+        if (editBtnLabel) editBtnLabel.value = btnData.label || `Slot ${slotIndex + 1}`;
+        if (editBtnSub) editBtnSub.value = btnData.sub || '';
+        if (editBtnType) editBtnType.value = btnData.type || 'chat';
+        if (editBtnValue) editBtnValue.value = btnData.value || '';
+        if (editBtnShortcut) editBtnShortcut.value = btnData.shortcut || `F${slotIndex + 1}`;
+        if (editBtnAutoEnter) editBtnAutoEnter.checked = (btnData.autoEnter !== false);
+
+        buttonEditModal?.classList.add('open');
+        autoAdjustWindowSize(true);
+    }
+
+    function closeButtonEditModal() {
+        buttonEditModal?.classList.remove('open');
+        currentEditingSlotIndex = null;
+        autoAdjustWindowSize(false);
+    }
+
+    btnCloseEditModal?.addEventListener('click', closeButtonEditModal);
+
+    btnSaveEditButton?.addEventListener('click', () => {
+        if (currentEditingSlotIndex === null) return;
+
+        const icon = editBtnIcon.value.trim() || '⚡';
+        const label = editBtnLabel.value.trim() || `Slot ${currentEditingSlotIndex + 1}`;
+        const sub = editBtnSub.value.trim();
+        const type = editBtnType.value;
+        const value = editBtnValue.value.trim();
+        const shortcut = editBtnShortcut.value.trim().toUpperCase() || `F${currentEditingSlotIndex + 1}`;
+        const autoEnter = editBtnAutoEnter ? editBtnAutoEnter.checked : true;
+
+        customButtonsConfig[currentEditingSlotIndex] = {
+            icon,
+            label,
+            sub,
+            type,
+            value,
+            shortcut,
+            autoEnter
+        };
+
+        saveButtonsConfig();
+        renderGrid();
+        closeButtonEditModal();
+    });
+
     function triggerPadFeedback(padElement) {
         if (!padElement) return;
         padElement.classList.add('pressed');
@@ -151,37 +283,55 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 200);
     }
 
-    async function sendSalutChat() {
-        if (activeScriptLabel) activeScriptLabel.innerText = 'salut';
-        
-        await invokeTauri('send_ipc_message', {
-            agent: 'scaphandre',
-            action: 'send_chat_message',
-            payload: { text: 'salut' }
-        });
-        console.log("[StreamDeck IPC -> Le Scaphandre] Message 'salut' transmis.");
+    async function executeButtonAction(btnData) {
+        const type = btnData.type || 'custom';
+        const val = btnData.value || '';
+        const autoEnter = (btnData.autoEnter !== false);
+
+        if (type === 'config') {
+            openConfigModal();
+            return;
+        }
+
+        if (type === 'chat') {
+            const chatText = val || btnData.label || 'salut';
+            if (activeScriptLabel) activeScriptLabel.innerText = chatText;
+            
+            const actionCmd = autoEnter ? 'send_chat_message' : 'type_text';
+            await invokeTauri('send_ipc_message', {
+                agent: 'scaphandre',
+                action: actionCmd,
+                payload: { text: chatText }
+            });
+            console.log(`[StreamDeck IPC -> Le Scaphandre] Chat (${actionCmd}): '${chatText}'`);
+        } else if (type === 'travel') {
+            const coords = val.split(',').map(s => parseInt(s.trim(), 10));
+            const x = !isNaN(coords[0]) ? coords[0] : 0;
+            const y = !isNaN(coords[1]) ? coords[1] : 0;
+            const travelCmd = `/travel ${x},${y}`;
+            if (activeScriptLabel) activeScriptLabel.innerText = travelCmd;
+            await invokeTauri('send_ipc_message', {
+                agent: 'scaphandre',
+                action: 'travel_to',
+                payload: { x, y }
+            });
+            console.log(`[StreamDeck IPC -> Le Scaphandre] Travel: ${travelCmd}`);
+        } else if (type === 'stop') {
+            if (activeScriptLabel) activeScriptLabel.innerText = 'STOP';
+            await invokeTauri('trigger_emergency_stop');
+            console.log("[StreamDeck IPC -> Le Cadran] Arrêt d'urgence déclenché.");
+        } else {
+            if (activeScriptLabel) activeScriptLabel.innerText = btnData.label;
+            await invokeTauri('send_ipc_message', {
+                agent: 'scaphandre',
+                action: 'custom_action',
+                payload: { command: val }
+            });
+            console.log(`[StreamDeck IPC] Action personnalisée: ${btnData.label}`);
+        }
     }
 
-    async function sendTravelToChat() {
-        const travelCmd = "/travel 4,28";
-        if (activeScriptLabel) activeScriptLabel.innerText = travelCmd;
-        
-        await invokeTauri('send_ipc_message', {
-            agent: 'scaphandre',
-            action: 'travel_to',
-            payload: { x: 4, y: 28 }
-        });
-        console.log(`[StreamDeck IPC -> Le Scaphandre] Commande '${travelCmd}' transmise.`);
-    }
-
-    async function triggerEmergencyStop() {
-        if (activeScriptLabel) activeScriptLabel.innerText = 'STOP';
-        
-        await invokeTauri('trigger_emergency_stop');
-        console.log("[StreamDeck IPC -> Le Cadran] Arrêt d'urgence déclenché.");
-    }
-
-    // Rendu dynamique de la grille selon rows x cols et taille personnalisée des pads (ex: 50x50)
+    // Rendu dynamique de la grille selon rows x cols
     function renderGrid() {
         if (!gridContainer) return;
         
@@ -194,24 +344,53 @@ document.addEventListener('DOMContentLoaded', () => {
         gridContainer.innerHTML = '';
         const totalSlots = gridConfig.rows * gridConfig.cols;
 
-        // Déterminer la taille optimale de la police / icones selon les dimensions px
         const isMini = (w <= 55 || h <= 55);
         const isMedium = (w <= 85 || h <= 85);
 
         for (let i = 0; i < totalSlots; i++) {
-            const btnData = defaultButtons[i] || {
-                id: `btn-custom-${i+1}`,
-                icon: '➕',
-                label: `P${i+1}`,
-                sub: '',
-                shortcut: `F${i+1}`,
-                action: () => {
-                    if (activeScriptLabel) activeScriptLabel.innerText = `Slot ${i+1} activé`;
+            let btnData;
+
+            // Slot 0 = Toujours CONFIG (F1, à gauche)
+            if (i === 0) {
+                btnData = defaultButtons[0];
+            } 
+            // Slot 1 = Toujours STOP (F2, à la place de SALUT, à droite immédiate de CONFIG)
+            else if (i === 1) {
+                btnData = {
+                    id: 'btn-stop',
+                    icon: '⏹',
+                    label: 'STOP',
+                    sub: 'Urgence',
+                    shortcut: 'F2',
+                    type: 'stop',
+                    value: ''
+                };
+            } 
+            // Slots à partir de index 2 = Modifiables par l'utilisateur
+            else {
+                // Décalage pour utiliser le reste de defaultButtons s'il y en a (ex: TRAVEL TO sur F3)
+                btnData = defaultButtons[i - 1] || {
+                    id: `btn-custom-${i+1}`,
+                    icon: '➕',
+                    label: `P${i+1}`,
+                    sub: '',
+                    shortcut: `F${i+1}`,
+                    type: 'chat',
+                    value: `Slot ${i+1}`
+                };
+
+                if (customButtonsConfig[i]) {
+                    btnData = {
+                        ...btnData,
+                        ...customButtonsConfig[i],
+                        id: `btn-custom-${i+1}`
+                    };
                 }
-            };
+            }
 
             const pad = document.createElement('button');
             pad.className = 'deck-pad';
+            if (i === 0 || i === 1) pad.classList.add('locked-config');
             pad.id = btnData.id;
             pad.setAttribute('data-key', btnData.shortcut);
             pad.style.width = `${w}px`;
@@ -226,21 +405,55 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="pad-label" style="font-size: ${labelSize};">${btnData.label}</div>
                 ${showSub ? `<div class="pad-sub">${btnData.sub}</div>` : ''}
                 ${!isMini ? `<kbd class="pad-shortcut">${btnData.shortcut}</kbd>` : ''}
+                <div class="long-press-progress"></div>
             `;
 
-            pad.addEventListener('click', () => {
-                triggerPadFeedback(pad);
-                if (btnData.action) btnData.action();
+            // Gestion de l'Appui Long (2 secondes = 2000 ms)
+            let pressTimer = null;
+            let isLongPress = false;
+
+            const startPress = (e) => {
+                if (e.button !== 0 && e.type === 'pointerdown') return;
+                isLongPress = false;
+                pad.classList.add('pressing');
+
+                // Ni CONFIG (index 0) ni STOP (index 1) ne déclenchent la modale d'édition
+                if (i > 1) {
+                    pressTimer = setTimeout(() => {
+                        isLongPress = true;
+                        pad.classList.remove('pressing');
+                        openButtonEditModal(i, btnData);
+                    }, 1000);
+                }
+            };
+
+            const cancelPress = () => {
+                if (pressTimer) {
+                    clearTimeout(pressTimer);
+                    pressTimer = null;
+                }
+                pad.classList.remove('pressing');
+            };
+
+            pad.addEventListener('pointerdown', startPress);
+            pad.addEventListener('pointerup', (e) => {
+                cancelPress();
+                if (!isLongPress) {
+                    triggerPadFeedback(pad);
+                    executeButtonAction(btnData);
+                }
             });
+            pad.addEventListener('pointerleave', cancelPress);
+            pad.addEventListener('pointercancel', cancelPress);
 
             gridContainer.appendChild(pad);
         }
 
-        autoAdjustWindowSize();
+        autoAdjustWindowSize(false);
     }
 
     // Calcule et applique automatiquement la taille idéale de la fenêtre Tauri
-    async function autoAdjustWindowSize() {
+    async function autoAdjustWindowSize(isModalOpen = false) {
         const w = gridConfig.btnWidth;
         const h = gridConfig.btnHeight;
         const cols = gridConfig.cols;
@@ -248,12 +461,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Largeur = padding latéral (24px) + boutons + gaps (10px par colonne) + marge de sécurité
         const gridWidth = (cols * w) + ((cols - 1) * 10) + 32;
-        // Largeur minimale requise pour afficher l'en-tête (bannière active + flux + tuile) proprement
         const targetWidth = Math.max(280, gridWidth);
 
-        // Hauteur = En-tête (~145px) + grille ((rows * h) + gaps) + footer (~32px) + padding global (~24px) + barre titre (~35px)
+        // Hauteur de base de la fenêtre
         const gridHeight = (rows * h) + ((rows - 1) * 10);
-        const targetHeight = 145 + gridHeight + 34 + 24 + 35;
+        let targetHeight = 145 + gridHeight + 34 + 24 + 35;
+
+        // Si une modale est ouverte, on passe la hauteur à 620px pour tout afficher sans scrollbar
+        if (isModalOpen) {
+            targetHeight = Math.max(620, targetHeight);
+        }
 
         try {
             await invokeTauri('adjust_window_size', {
@@ -267,6 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialisation
     loadSavedConfig();
+    loadSavedButtonsConfig();
     renderGrid();
 
     // Éléments du Flux Visuel
