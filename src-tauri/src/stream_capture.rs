@@ -16,7 +16,6 @@ extern "system" {
     fn GetClientRect(hwnd: isize, lpRect: *mut RECT) -> i32;
     fn GetWindowRect(hwnd: isize, lpRect: *mut RECT) -> i32;
     fn GetSystemMetrics(nIndex: i32) -> i32;
-    fn PrintWindow(hwnd: isize, hdcBlt: isize, nFlags: u32) -> i32;
     fn IsWindowVisible(hwnd: isize) -> i32;
     fn IsIconic(hwnd: isize) -> i32;
 }
@@ -38,7 +37,6 @@ const DIB_RGB_COLORS: u32 = 0;
 const BI_RGB: u32 = 0;
 const SM_CXSCREEN: i32 = 0;
 const SM_CYSCREEN: i32 = 1;
-const PW_RENDERFULLCONTENT: u32 = 0x00000002;
 
 #[repr(C)]
 struct RECT {
