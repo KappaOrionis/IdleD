@@ -130,20 +130,24 @@ impl Win32StreamCapture {
             let src_w = (rect.right).max(64);
             let src_h = (rect.bottom).max(64);
 
+            // Zoom calibré sur le coin supérieur gauche du jeu (Nom de zone, Coordonnées, Niveau)
+            // Région HUD : X de 0.5% à 30%, Y de 0.5% à 12%
+            let (crop_x, crop_y, crop_w, crop_h) = if actual_hwnd != GetDesktopWindow() {
+                let cw = ((src_w as f64) * 0.30).max(180.0) as i32;
+                let ch = ((src_h as f64) * 0.12).max(60.0) as i32;
+                let cx = ((src_w as f64) * 0.005) as i32;
+                let cy = ((src_h as f64) * 0.005) as i32;
+                (cx, cy, cw.min(src_w), ch.min(src_h))
+            } else {
+                (0, 0, src_w, src_h)
+            };
+
             let hdc_mem = CreateCompatibleDC(hdc_src);
             let hbmp = CreateCompatibleBitmap(hdc_src, thumb_w, thumb_h);
             let old_bmp = SelectObject(hdc_mem, hbmp);
 
-            // Tenter PrintWindow pour une capture propre avec DWM / GPU Composition
-            let mut print_ok = false;
-            if actual_hwnd != GetDesktopWindow() {
-                print_ok = PrintWindow(actual_hwnd, hdc_mem, PW_RENDERFULLCONTENT) != 0;
-            }
-
-            if !print_ok {
-                // Fallback StretchBlt direct
-                StretchBlt(hdc_mem, 0, 0, thumb_w, thumb_h, hdc_src, 0, 0, src_w, src_h, SRCCOPY);
-            }
+            // StretchBlt zoomé directement depuis la région HUD
+            StretchBlt(hdc_mem, 0, 0, thumb_w, thumb_h, hdc_src, crop_x, crop_y, crop_w, crop_h, SRCCOPY);
 
             let mut bmi = BITMAPINFO {
                 bmi_header: BITMAPINFOHEADER {

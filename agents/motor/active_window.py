@@ -64,6 +64,13 @@ class ActiveWindowController:
             }
         return None
 
+    def get_active_window_rect(self) -> Optional[Tuple[int, int, int, int]]:
+        """Retourne (x, y, w, h) de la fenêtre active."""
+        geom = self.get_active_window_geometry()
+        if geom:
+            return (geom["left"], geom["top"], geom["width"], geom["height"])
+        return None
+
     def get_active_client_geometry(self) -> Optional[Dict[str, int]]:
         """Retourne la zone cliente de la fenêtre active."""
         hwnd = self.get_active_hwnd()

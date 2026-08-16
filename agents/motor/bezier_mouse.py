@@ -167,8 +167,65 @@ class BezierMouse:
 
         self.move_cursor_to(target_x, target_y)
         time.sleep(random.uniform(0.04, 0.1))
-        self.click(button)
-        return (target_x, target_y)
+    def swipe_opposite_direction(self, direction_key: str, distance_px: int = 150):
+        """
+        Effectue un glisser-déposer (Swipe) fluide de la souris dans la direction opposée :
+        - Touche 'Up' (Haut) -> Swipe vers le Bas (Down)
+        - Touche 'Down' (Bas) -> Swipe vers le Haut (Up)
+        - Touche 'Left' (Gauche) -> Swipe vers la Droite (Right)
+        - Touche 'Right' (Droite) -> Swipe vers la Gauche (Left)
+        Permet au personnage de changer de carte / écran de jeu instantanément.
+        """
+        rect = self.active_window.get_active_window_rect()
+        if rect:
+            win_x, win_y, win_w, win_h = rect
+            center_x = win_x + (win_w // 2)
+            center_y = win_y + (win_h // 2)
+        else:
+            center_x, center_y = self.get_current_cursor_pos()
+
+        dir_lower = direction_key.lower()
+
+        # Le swipe démarre au centre exact de l'écran et s'étend dans la direction opposée
+        start_x, start_y = center_x, center_y
+
+        if dir_lower in ["up", "haut"]:
+            # Touche Haut (↑) -> Swipe depuis le centre vers le bas
+            end_x, end_y = center_x, center_y + distance_px
+        elif dir_lower in ["down", "bas"]:
+            # Touche Bas (↓) -> Swipe depuis le centre vers le haut
+            end_x, end_y = center_x, center_y - distance_px
+        elif dir_lower in ["left", "gauche"]:
+            # Touche Gauche (←) -> Swipe depuis le centre vers la droite
+            end_x, end_y = center_x + distance_px, center_y
+        else: # Right / Droite
+            # Touche Droite (→) -> Swipe depuis le centre vers la gauche
+            end_x, end_y = center_x - distance_px, center_y
+
+        print(f"[Le Scaphandre] Swipe centré maintenu ({direction_key} -> départ centre: {start_x},{start_y} vers {end_x},{end_y})")
+
+        # 1. Positionnement initial au centre de l'écran
+        self.move_cursor_to(start_x, start_y)
+        time.sleep(0.04)
+
+        # 2. Pression du bouton gauche (maintenu enfoncé)
+        self._send_mouse_input(MOUSEEVENTF_LEFTDOWN)
+        time.sleep(0.05)
+
+        # 3. Glissement interpolé fluide avec clic maintenu
+        steps = 14
+        for i in range(1, steps + 1):
+            t = i / float(steps)
+            smooth_t = 1.0 - (1.0 - t) ** 2
+            inter_x = int(start_x + (end_x - start_x) * smooth_t)
+            inter_y = int(start_y + (end_y - start_y) * smooth_t)
+            self.user32.SetCursorPos(inter_x, inter_y)
+            time.sleep(0.01)
+
+        # 4. Relâchement du bouton gauche à destination
+        time.sleep(0.05)
+        self._send_mouse_input(MOUSEEVENTF_LEFTUP)
+        time.sleep(0.03)
 
 if __name__ == "__main__":
     mouse = BezierMouse()

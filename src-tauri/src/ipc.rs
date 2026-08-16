@@ -298,11 +298,61 @@ impl AgentIPCBridge {
         }
     }
 
-    /// Injecte du texte complet dans la fenêtre cible
-    pub fn inject_text_to_active(&self, text: &str, press_enter: bool) -> Result<(), String> {
+    /// Déplace le curseur et clique sur des coordonnées de l'écran
+    pub fn click_at(x: i32, y: i32) {
+        #[cfg(target_os = "windows")]
+        unsafe {
+            #[link(name = "user32")]
+            extern "system" {
+                fn SetCursorPos(x: i32, y: i32) -> i32;
+                fn mouse_event(dwFlags: u32, dx: u32, dy: u32, dwData: u32, dwExtraInfo: usize);
+            }
+            SetCursorPos(x, y);
+            std::thread::sleep(Duration::from_millis(35));
+            mouse_event(0x0002 /* MOUSEEVENTF_LEFTDOWN */, 0, 0, 0, 0);
+            std::thread::sleep(Duration::from_millis(50));
+            mouse_event(0x0004 /* MOUSEEVENTF_LEFTUP */, 0, 0, 0, 0);
+            std::thread::sleep(Duration::from_millis(70));
+        }
+    }
+
+    /// Injecte du texte complet dans la fenêtre cible (avec clic préalable dans la zone de texte)
+    pub fn inject_text_to_active(&self, text: &str, press_enter: bool, click_chat_box: bool) -> Result<(), String> {
         let target = self.get_active_target_window();
         if target.hwnd != 0 {
             self.focus_target_window(target.hwnd);
+
+            if click_chat_box {
+                #[cfg(target_os = "windows")]
+                unsafe {
+                    #[repr(C)]
+                    struct WinRect {
+                        left: i32,
+                        top: i32,
+                        right: i32,
+                        bottom: i32,
+                    }
+                    #[link(name = "user32")]
+                    extern "system" {
+                        fn GetWindowRect(hwnd: isize, lpRect: *mut WinRect) -> i32;
+                    }
+                    let mut rect = WinRect { left: 0, top: 0, right: 0, bottom: 0 };
+                    GetWindowRect(target.hwnd, &mut rect);
+                    let win_x = rect.left;
+                    let win_y = rect.top;
+                    let win_w = (rect.right - rect.left).max(400);
+                    let win_h = (rect.bottom - rect.top).max(300);
+
+                    // Zone de saisie chat calibrée Dofus Unity :
+                    // X = 8% de la largeur (dans la boîte texte après /G)
+                    // Y = 98% de la hauteur (au bas de la fenêtre de chat)
+                    let click_x = win_x + (win_w as f64 * 0.08) as i32;
+                    let click_y = win_y + (win_h as f64 * 0.98) as i32;
+
+                    println!("[Le Scaphandre] Clic dans la zone de saisie chat calibrée: ({}, {})", click_x, click_y);
+                    Self::click_at(click_x, click_y);
+                }
+            }
         }
 
         if press_enter {
@@ -333,7 +383,7 @@ impl AgentIPCBridge {
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 println!("[IPC Bridge -> Le Scaphandre] Macro Texte/Chat déclenchée: '{}'", text);
-                self.inject_text_to_active(text, false)?;
+                self.inject_text_to_active(text, false, true)?;
                 Ok(serde_json::json!({
                     "status": "success",
                     "agent": "scaphandre",
@@ -346,7 +396,7 @@ impl AgentIPCBridge {
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 println!("[IPC Bridge -> Le Scaphandre] Macro Texte physique: '{}'", text);
-                self.inject_text_to_active(text, false)?;
+                self.inject_text_to_active(text, false, true)?;
                 Ok(serde_json::json!({
                     "status": "success",
                     "agent": "scaphandre",
@@ -359,7 +409,7 @@ impl AgentIPCBridge {
                 let y = msg.payload.get("y").and_then(|v| v.as_i64()).unwrap_or(0);
                 let cmd = format!("/travel {},{}", x, y);
                 println!("[IPC Bridge -> Le Scaphandre] Commande Travel: {}", cmd);
-                self.inject_text_to_active(&cmd, true)?;
+                self.inject_text_to_active(&cmd, true, true)?;
                 Ok(serde_json::json!({
                     "status": "success",
                     "agent": "scaphandre",

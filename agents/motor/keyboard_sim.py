@@ -170,14 +170,36 @@ class KeyboardSimulator:
         self.type_text(text)
         return True
 
-    def send_chat_message(self, message: str) -> bool:
+    def send_chat_message(self, message: str, click_input_box: bool = True) -> bool:
         """
-        Envoie un message/commande dans la fenêtre active (Entrée -> Texte -> Entrée).
+        Envoie un message/commande dans le chat :
+        1. Localise et clique dans la zone de texte du chat pour garantir le focus
+        2. Tape le texte avec délais biomécaniques
+        3. Valide avec Entrée
         """
+        if click_input_box:
+            try:
+                from agents.vision.chat_detector import ChatDetector
+                from agents.motor.bezier_mouse import BezierMouse
+                
+                detector = ChatDetector()
+                mouse = BezierMouse()
+                rect = self.active_window.get_active_window_rect()
+                
+                chat_info = detector.detect_chat_input_box(None, rect)
+                if chat_info.get("found"):
+                    target_x, target_y = chat_info["click_target"]
+                    print(f"[Le Scaphandre] Clic dans la zone de saisie chat ({target_x}, {target_y})...")
+                    mouse.move_cursor_to(target_x, target_y)
+                    mouse.click(button="left")
+                    time.sleep(random.uniform(0.08, 0.15))
+            except Exception as e:
+                print(f"[Le Scaphandre] Clic préliminaire chat ignoré ({e}), fallback Entrée")
+
         self.send_key('enter')
-        time.sleep(random.uniform(0.12, 0.22))
+        time.sleep(random.uniform(0.10, 0.18))
         self.type_text(message)
-        time.sleep(random.uniform(0.08, 0.18))
+        time.sleep(random.uniform(0.08, 0.15))
         self.send_key('enter')
         return True
 

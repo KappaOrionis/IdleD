@@ -72,7 +72,7 @@ fn update_map_info(
 }
 
 #[tauri::command]
-fn trigger_directional_move(direction: String, state: State<'_, Mutex<AppState>>) -> Result<String, String> {
+fn trigger_directional_move(direction: String, window: tauri::Window, state: State<'_, Mutex<AppState>>) -> Result<String, String> {
     let app = state.lock().unwrap();
     let dir = match direction.as_str() {
         "Up" => DirectionKey::Up,
@@ -80,7 +80,16 @@ fn trigger_directional_move(direction: String, state: State<'_, Mutex<AppState>>
         "Left" => DirectionKey::Left,
         _ => DirectionKey::Right,
     };
-    app.hotkeys.handle_directional_key(dir);
+    let target = app.ipc.get_active_target_window();
+    app.hotkeys.handle_directional_key(dir, target.hwnd);
+
+    // Redonner le focus à la fenêtre de l'application IdleD pour enchaîner les commandes
+    if let Err(e) = window.set_focus() {
+        println!("[Superviseur Rust] Erreur réactivation focus application : {}", e);
+    } else {
+        println!("[Superviseur Rust] Focus restitué à l'application IdleD");
+    }
+
     Ok(format!("Transition directionnelle {:?} initiée", direction))
 }
 

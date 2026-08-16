@@ -32,3 +32,11 @@ def test_cursor_pos_reading():
     pos = mouse.get_current_cursor_pos()
     assert isinstance(pos, tuple)
     assert len(pos) == 2
+
+def test_swipe_opposite_direction_execution():
+    mouse = BezierMouse()
+    # Test d'exécution du swipe sans exception
+    mouse.swipe_opposite_direction("Up", distance_px=50)
+    mouse.swipe_opposite_direction("Down", distance_px=50)
+    mouse.swipe_opposite_direction("Left", distance_px=50)
+    mouse.swipe_opposite_direction("Right", distance_px=50)

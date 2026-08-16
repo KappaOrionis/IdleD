@@ -306,6 +306,21 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => lastKeyBadge.classList.remove('pressed'), 300);
         }
 
+        // Interception des flèches directionnelles pour le swipe opposé de changement de carte
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            invokeTauri('trigger_directional_move', { direction: 'Up' }).then(() => window.focus());
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            invokeTauri('trigger_directional_move', { direction: 'Down' }).then(() => window.focus());
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            invokeTauri('trigger_directional_move', { direction: 'Left' }).then(() => window.focus());
+        } else if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            invokeTauri('trigger_directional_move', { direction: 'Right' }).then(() => window.focus());
+        }
+
         const matchingPad = gridContainer?.querySelector(`[data-key="${e.key}"]`);
         if (matchingPad) {
             e.preventDefault();
