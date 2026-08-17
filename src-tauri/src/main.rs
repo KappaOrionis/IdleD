@@ -56,6 +56,7 @@ fn update_map_info(
     pos_x: Option<i32>,
     pos_y: Option<i32>,
     area_level: Option<u32>,
+    sun_nodes_count: Option<u32>,
     error_message: Option<String>,
     state: State<'_, Mutex<AppState>>
 ) -> Result<MapInfo, String> {
@@ -66,6 +67,7 @@ fn update_map_info(
         pos_x,
         pos_y,
         area_level,
+        sun_nodes_count: sun_nodes_count.unwrap_or(0),
         error_message,
     };
     Ok(app.fsm.update_map_info(new_info))

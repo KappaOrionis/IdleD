@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const mapZoneName = document.getElementById('map-zone-name');
     const mapCoords = document.getElementById('map-coords');
     const mapLevel = document.getElementById('map-level');
+    const sunNodesBadge = document.getElementById('sun-nodes-badge');
 
     // Modale de Configuration
     const configModal = document.getElementById('config-modal');
@@ -490,7 +491,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Éléments du Flux Visuel
     const streamThumbnailImg = document.getElementById('stream-thumbnail-img');
 
-    // Actualisation périodique du titre et de la vignette de flux visuel
+    // Actualisation périodique du titre, de la tuile active et du nombre de plots de changement de carte
     async function updateActiveWindowStream() {
         try {
             const thumb = await invokeTauri('get_stream_thumbnail');
@@ -502,8 +503,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     streamThumbnailImg.src = thumb.data_url;
                 }
             }
+
+            const mapInfo = await invokeTauri('get_current_map_info');
+            if (mapInfo && sunNodesBadge) {
+                const count = mapInfo.sun_nodes_count || 0;
+                const text = count === 1 ? '☀️ 1 plot' : `☀️ ${count} plots`;
+                sunNodesBadge.innerText = text;
+            }
         } catch (err) {
-            console.debug("Erreur rafraîchissement flux visuel:", err);
+            console.debug("Erreur rafraîchissement flux visuel / map info:", err);
         }
     }
     updateActiveWindowStream();
@@ -539,10 +547,25 @@ document.addEventListener('DOMContentLoaded', () => {
             invokeTauri('trigger_directional_move', { direction: 'Right' }).then(() => window.focus());
         }
 
-        const matchingPad = gridContainer?.querySelector(`[data-key="${e.key}"]`);
+        // Déclenchement du raccourci pad correspondant (ex: F1, F2, F3, etc.) insensible à la casse
+        const pressedKeyUpper = e.key.toUpperCase();
+        const allPads = gridContainer?.querySelectorAll('.deck-pad') || [];
+        let matchingPad = null;
+        allPads.forEach(pad => {
+            const padKey = (pad.getAttribute('data-key') || '').toUpperCase();
+            if (padKey && padKey === pressedKeyUpper) {
+                matchingPad = pad;
+            }
+        });
+
         if (matchingPad) {
             e.preventDefault();
-            matchingPad.click();
+            triggerPadFeedback(matchingPad);
+            // Simuler la récréation de l'action du pad
+            matchingPad.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 }));
+            setTimeout(() => {
+                matchingPad.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, button: 0 }));
+            }, 50);
         }
     });
 });

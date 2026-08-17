@@ -8,17 +8,19 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from agents.vision.screen_capture import ScreenCapture
 from agents.vision.map_reader import MapHUDReader
+from agents.vision.sun_node_detector import SunNodeDetector
 
 class TileTrackerLoop:
     """
     Agent de Perception Visuelle (La Noxine) - Boucle de Suivi de Tuile Temps Réel.
     Exécute une capture vidéo en boucle fermée et alerte dès que les coordonnées
-    de la tuile [x, y], la zone ou le niveau changent dans le client Dofus Unity.
+    de la tuile [x, y], la zone, le niveau ou le nombre de plots de changement de carte changent.
     """
     def __init__(self, check_interval_sec: float = 0.5):
         self.check_interval = check_interval_sec
         self.screen_capture = ScreenCapture()
         self.map_reader = MapHUDReader()
+        self.sun_detector = SunNodeDetector()
         self.current_tile_data: Optional[Dict[str, Any]] = None
         self.running = False
         self._thread: Optional[threading.Thread] = None
@@ -52,12 +54,16 @@ class TileTrackerLoop:
 
             if not has_active_window:
                 latest_data = self.map_reader.parse_hud_text("", "")
+                latest_data["sun_nodes_count"] = 0
             else:
-                # Analyse de la région de la fenêtre active
+                frame = self.screen_capture.capture_frame()
+                sun_info = self.sun_detector.detect_sun_nodes(frame)
+                
                 latest_data = self.map_reader.parse_hud_text(
                     "Amakna (Souterrains)",
                     "4, 28 - Niveau 1"
                 )
+                latest_data["sun_nodes_count"] = sun_info["count"]
 
             # Vérification du changement d'état ou de tuile
             if self.current_tile_data != latest_data:

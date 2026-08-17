@@ -9,6 +9,7 @@ pub struct MapInfo {
     pub pos_x: Option<i32>,
     pub pos_y: Option<i32>,
     pub area_level: Option<u32>,
+    pub sun_nodes_count: u32,
     pub error_message: Option<String>,
 }
 
@@ -20,6 +21,7 @@ impl MapInfo {
             pos_x: Some(x),
             pos_y: Some(y),
             area_level: Some(level),
+            sun_nodes_count: 0,
             error_message: None,
         }
     }
@@ -120,6 +122,7 @@ mod tests {
             pos_x: None,
             pos_y: None,
             area_level: None,
+            sun_nodes_count: 0,
             error_message: Some("Fenêtre masquée".to_string()),
         };
         let updated = fsm.update_map_info(failed_info.clone());
