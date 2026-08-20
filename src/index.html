@@ -20,16 +20,44 @@
             <!-- 2. Vignette de Capture du Flux Visuel (Entre les deux) -->
             <div class="stream-thumbnail-container" id="stream-thumbnail-container" title="Flux de Reconnaissance Visuelle (DXGI / OCR Live)">
                 <img id="stream-thumbnail-img" class="stream-thumbnail-img" alt="Capture Flux" src="" />
-                <div class="stream-live-badge"><span class="live-dot">●</span> LIVE FLUX</div>
             </div>
 
-            <!-- 3. Description de la Tuile Active (En-dessous) -->
-            <div class="tile-info-badge" id="tile-info-badge">
-                <span class="tile-icon">🗺️</span>
-                <span class="tile-zone" id="map-zone-name">Amakna (Souterrains)</span>
-                <span class="tile-coords highlight" id="map-coords">[4, 28]</span>
-                <span class="tile-level" id="map-level">Niv. 1</span>
-                <span class="sun-nodes-badge" id="sun-nodes-badge" title="Plots de changement de carte détectés">☀️ 0 plot</span>
+            <!-- 3. Informations de la Tuile en Colonne (Position, Nb Plot, Synthèse) avant les boutons de macro -->
+            <div class="tile-info-column" id="tile-info-badge">
+                <!-- Ligne 1 : Position & Coordonnées -->
+                <div class="info-row info-position" title="Zone et coordonnées de la carte">
+                    <div class="info-label-group">
+                        <span class="info-icon">📍</span>
+                        <span class="info-label">Position :</span>
+                    </div>
+                    <div class="info-value-group">
+                        <span class="tile-coords highlight" id="map-coords">--</span>
+                        <span class="tile-zone" id="map-zone-name">--</span>
+                        <span class="tile-level" id="map-level">--</span>
+                    </div>
+                </div>
+
+                <!-- Ligne 2 : Nombre de Plots / Changements de carte -->
+                <div class="info-row info-plots" title="Plots de changement de carte détectés">
+                    <div class="info-label-group">
+                        <span class="info-icon">☀️</span>
+                        <span class="info-label">Plots Sorties :</span>
+                    </div>
+                    <div class="info-value-group">
+                        <span class="sun-nodes-badge" id="sun-nodes-badge">--</span>
+                    </div>
+                </div>
+
+                <!-- Ligne 3 : Synthèse de la Carte & SLAM -->
+                <div class="info-row info-synthesis interactive-row" id="btn-open-map-synth" title="Cliquez pour afficher la Synthèse Complète de la Carte">
+                    <div class="info-label-group">
+                        <span class="info-icon">🗺️</span>
+                        <span class="info-label">Synthèse Carte :</span>
+                    </div>
+                    <div class="info-value-group">
+                        <span class="map-synth-pill">🔍 Ouvrir SLAM</span>
+                    </div>
+                </div>
             </div>
         </header>
 
@@ -104,6 +132,8 @@
                     <div class="form-group">
                         <label for="edit-btn-type">Type d'Action :</label>
                         <select id="edit-btn-type">
+                            <option value="mining_room">⛏️ Macro Minage (Carte Actuelle)</option>
+                            <option value="harvest">🌾 Récolte & Surveillance (/travel)</option>
                             <option value="chat">💬 Envoi de message Chat</option>
                             <option value="travel">🚀 Commande /travel (Déplacement)</option>
                             <option value="custom">⚡ Commande IPC Personnalisée</option>
@@ -112,6 +142,114 @@
                     <div class="form-group" id="group-action-value">
                         <label for="edit-btn-value" id="label-action-value">Message / Paramètre :</label>
                         <input type="text" id="edit-btn-value" placeholder="ex: salut ou 4,28">
+                    </div>
+                    <!-- Configuration spécifique à l'Action de Récolte -->
+                    <div class="harvest-config-container" id="group-harvest-config" style="display: none;">
+                        <div class="form-group">
+                            <label for="edit-harvest-coords">📍 Coordonnées de la Tuile Cible (Surveillance & /travel) :</label>
+                            <input type="text" id="edit-harvest-coords" placeholder="ex: 4,28" style="font-family: monospace;">
+                        </div>
+                        <div class="form-group">
+                            <label>🌾 Métiers & Ressources à Récolter :</label>
+                            <div class="jobs-accordion">
+                                <details class="job-category" open>
+                                    <summary>⛏️ Mineur (15 ressources)</summary>
+                                    <div class="resource-checkbox-grid">
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="fer"> Fer (Niv. 1)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="cuivre" checked> Cuivre (Niv. 20)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="bronze"> Bronze (Niv. 40)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="kobalte"> Kobalte (Niv. 60)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="manganese"> Manganièse (Niv. 80)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="etain"> Étain (Niv. 100)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="argent"> Argent (Niv. 120)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="bauxite"> Bauxite (Niv. 140)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="or"> Or (Niv. 160)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="dolomite"> Dolomite (Niv. 180)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="silicate"> Silicate (Niv. 190)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="obsidienne"> Obsidienne (Niv. 200)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="ecume_mer"> Écume de Mer (Niv. 200)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="aquamarine"> Aigue-Marine (Niv. 200)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="orichalque"> Orichalque (Niv. 200)</label>
+                                    </div>
+                                </details>
+                                <details class="job-category">
+                                    <summary>🪓 Bûcheron (23 arbres)</summary>
+                                    <div class="resource-checkbox-grid">
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="frene"> Frêne (Niv. 1)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="chataignier"> Châtaignier (Niv. 20)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="noyer"> Noyer (Niv. 40)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="chene"> Chêne (Niv. 60)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="erable"> Érable (Niv. 80)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="bambou"> Bambou (Niv. 100)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="if"> If (Niv. 110)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="merisier"> Merisier (Niv. 120)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="ebene"> Ébène (Niv. 130)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="kalyptus"> Kalyptus (Niv. 140)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="charme"> Charme (Niv. 150)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="bambou_sombre"> Bambou Sombre (Niv. 160)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="orme"> Orme (Niv. 170)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="bambou_sacre"> Bambou Sacré (Niv. 180)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="acajou"> Acajou (Niv. 190)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="aquajou"> Aquajou (Niv. 200)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="oliviolet"> Oliviolet (Niv. 200)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="noisetier"> Noisetier (Niv. 200)</label>
+                                    </div>
+                                </details>
+                                <details class="job-category">
+                                    <summary>🌾 Paysan (14 céréales)</summary>
+                                    <div class="resource-checkbox-grid">
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="ble"> Blé (Niv. 1)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="orge"> Orge (Niv. 20)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="avoine"> Avoine (Niv. 40)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="houblon"> Houblon (Niv. 60)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="lin_paysan"> Lin (Niv. 80)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="seigle"> Seigle (Niv. 100)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="riz"> Riz (Niv. 120)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="malt"> Malt (Niv. 140)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="chanvre_paysan"> Chanvre (Niv. 160)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="maïs"> Maïs (Niv. 180)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="millet"> Millet (Niv. 190)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="frostiz"> Frostiz (Niv. 200)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="quinoa"> Quinoa (Niv. 200)</label>
+                                    </div>
+                                </details>
+                                <details class="job-category">
+                                    <summary>🌿 Alchimiste (13 plantes)</summary>
+                                    <div class="resource-checkbox-grid">
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="ortie"> Ortie (Niv. 1)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="sauge"> Sauge (Niv. 20)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="trefle_5_feuilles"> Trèfle à 5 feuilles (Niv. 40)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="menthe_sauvage"> Menthe Sauvage (Niv. 60)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="orchidee_sauvage"> Orchidée Sauvage (Niv. 80)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="edelweiss"> Edelweiss (Niv. 100)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="graine_pandouille"> Graine de Pandouille (Niv. 120)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="ginseng"> Ginseng (Niv. 140)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="belladonne"> Belladonne (Niv. 160)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="mandragore"> Mandragore (Niv. 180)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="perce_neige"> Perce-Neige (Niv. 200)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="salikorne"> Salikorne (Niv. 200)</label>
+                                    </div>
+                                </details>
+                                <details class="job-category">
+                                    <summary>🎣 Pêcheur (14 poissons)</summary>
+                                    <div class="resource-checkbox-grid">
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="goujon"> Goujon (Niv. 1)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="greuvette"> Greuvette (Niv. 20)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="truite"> Truite (Niv. 40)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="crabes"> Crabe (Niv. 60)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="poisson_chat"> Poisson-Chat (Niv. 80)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="poisson_pané"> Poisson Pané (Niv. 100)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="carpe"> Carpe (Niv. 120)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="sardine"> Sardine (Niv. 140)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="brochet"> Brochet (Niv. 160)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="thon"> Thon (Niv. 180)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="espadon"> Espadon (Niv. 190)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="requin"> Requin (Niv. 200)</label>
+                                        <label><input type="checkbox" class="harvest-resource-cb" value="poisson_frigost"> Tanche de Frigost (Niv. 200)</label>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
                     </div>
                     <div class="form-group form-group-checkbox" id="group-auto-enter">
                         <label class="checkbox-label" for="edit-btn-auto-enter">
@@ -130,11 +268,92 @@
             </div>
         </div>
 
+        <!-- Modal / Panneau Synthèse Complète de la Carte (SLAM Cognitif) -->
+        <div class="modal-overlay" id="map-synthesis-modal">
+            <div class="modal-card map-synth-card">
+                <div class="modal-header">
+                    <div class="modal-title-container">
+                        <span class="modal-title">🗺️ Synthèse de la Carte & Mémoire Cognitive</span>
+                        <span class="map-synth-status-tag" id="synth-status-tag">🟢 Synchronisé</span>
+                    </div>
+                    <button class="modal-close" id="btn-close-map-synth">✕</button>
+                </div>
+                <div class="modal-body map-synth-body">
+                    <!-- 1. En-tête de la Tuile Active -->
+                    <div class="synth-tile-header">
+                        <div class="synth-zone-info">
+                            <span class="synth-zone-title" id="synth-zone-name">Mine Istairameur</span>
+                            <span class="synth-zone-sub" id="synth-zone-sub">Étage Souterrain • Salle Centrale</span>
+                        </div>
+                        <div class="synth-coords-badge">
+                            <span class="synth-coords-val" id="synth-coords-val">[-3, 9]</span>
+                            <span class="synth-level-val" id="synth-level-val">Niv. 120</span>
+                        </div>
+                    </div>
+
+                    <!-- 2. Grille de Synthèse en 3 colonnes/sections -->
+                    <div class="synth-grid-layout">
+                        <!-- Colonne 1 : Ressources & Gisements -->
+                        <div class="synth-section-card">
+                            <div class="synth-section-title">
+                                <span>⛏️ Ressources Recensées</span>
+                                <span class="synth-count-badge" id="synth-ores-count">6 filons</span>
+                            </div>
+                            <div class="synth-ores-list" id="synth-ores-list">
+                                <!-- Rempli dynamiquement -->
+                            </div>
+                        </div>
+
+                        <!-- Colonne 2 : Sorties & Graphe de Navigation -->
+                        <div class="synth-section-card">
+                            <div class="synth-section-title">
+                                <span>🚪 Sorties & Soleils</span>
+                                <span class="synth-count-badge" id="synth-exits-count">3 sorties</span>
+                            </div>
+                            <div class="synth-exits-list" id="synth-exits-list">
+                                <!-- Rempli dynamiquement -->
+                            </div>
+                        </div>
+
+                        <!-- Colonne 3 : Faune & Monstres -->
+                        <div class="synth-section-card">
+                            <div class="synth-section-title">
+                                <span>👾 Faune & Menaces</span>
+                                <span class="synth-count-badge" id="synth-mobs-count">0 danger</span>
+                            </div>
+                            <div class="synth-mobs-list" id="synth-mobs-list">
+                                <!-- Rempli dynamiquement -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. Mini-Radar SLAM des Tuiles Voisines Découvertes -->
+                    <div class="synth-radar-section">
+                        <div class="synth-radar-title">
+                            <span>🧭 Radar SLAM des Tuiles Adjacentes</span>
+                            <span class="synth-radar-hint">Cliquez sur une tuile pour simuler le routage</span>
+                        </div>
+                        <div class="synth-radar-grid" id="synth-radar-grid">
+                            <!-- Grille 3x3 remplie dynamiquement -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer synth-footer">
+                    <button class="modal-btn btn-secondary" id="btn-synth-inspect-room">🔍 Inspecter la Salle (Noxine + Scaphandre)</button>
+                    <button class="modal-btn btn-save" id="btn-close-map-synth-action">Fermer</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Barre de Statut Inférieure StreamDeck Ultra-Compacte -->
         <footer class="bottom-status-bar">
             <div class="status-item status-action">
                 <span class="status-icon">📜</span>
                 <span class="status-value highlight" id="active-script">—</span>
+            </div>
+            <div class="status-item status-map-btn" id="footer-map-synth-btn" title="Ouvrir la Synthèse de la Carte">
+                <span class="status-icon">🗺️</span>
+                <span class="status-map-label">Carte</span>
             </div>
             <div class="status-item status-key">
                 <kbd class="key-badge" id="last-key">—</kbd>

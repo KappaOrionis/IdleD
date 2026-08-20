@@ -1,8 +1,9 @@
 import cv2
 import numpy as np
 from typing import List, Dict, Any, Optional
+from agents.vision.base_detector import BaseObjectDetector
 
-class SunNodeDetector:
+class SunNodeDetector(BaseObjectDetector):
     """
     Agent de Perception Visuelle (La Noxine) - Détecteur de Plots de Changement de Carte ("Sun Nodes").
     
@@ -10,7 +11,7 @@ class SunNodeDetector:
     circulaires dorés/jaunes/verts de changement de carte au sol dans les souterrains et bâtiments.
     """
     def __init__(self, confidence_threshold: float = 0.50):
-        self.confidence_threshold = confidence_threshold
+        super().__init__(name="sun_node", confidence_threshold=confidence_threshold)
         
         # Plage HSV 1 : Jaune / Doré vif (motif central & pointes extérieures du soleil)
         self.lower_gold = np.array([15, 60, 60], dtype=np.uint8)
@@ -19,6 +20,9 @@ class SunNodeDetector:
         # Plage HSV 2 : Vert / Turquoise lumineux (anneau extérieur du plot de soleil)
         self.lower_green = np.array([41, 50, 50], dtype=np.uint8)
         self.upper_green = np.array([90, 255, 255], dtype=np.uint8)
+
+    def detect(self, frame: Optional[np.ndarray]) -> Dict[str, Any]:
+        return self.detect_sun_nodes(frame)
 
     def detect_sun_nodes(self, frame: Optional[np.ndarray]) -> Dict[str, Any]:
         """
@@ -85,8 +89,10 @@ class SunNodeDetector:
                 filtered_nodes.append(node)
 
         return {
+            "object_type": self.name,
             "count": len(filtered_nodes),
             "nodes": filtered_nodes,
+            "detections": filtered_nodes,
             "found": len(filtered_nodes) > 0
         }
 

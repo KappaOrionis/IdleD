@@ -26,6 +26,8 @@ extern "system" {
     fn CreateCompatibleDC(hdc: isize) -> isize;
     fn CreateCompatibleBitmap(hdc: isize, cx: i32, cy: i32) -> isize;
     fn SelectObject(hdc: isize, hgdiobj: isize) -> isize;
+    fn SetStretchBltMode(hdc: isize, mode: i32) -> i32;
+    fn SetBrushOrgEx(hdc: isize, x: i32, y: i32, lppt: *mut std::ffi::c_void) -> i32;
     fn StretchBlt(hdcDest: isize, nXOriginDest: i32, nYOriginDest: i32, nWidthDest: i32, nHeightDest: i32, hdcSrc: isize, nXOriginSrc: i32, nYSrc: i32, nWidthSrc: i32, nHeightSrc: i32, dwRop: u32) -> i32;
     fn DeleteDC(hdc: isize) -> i32;
     fn DeleteObject(ho: isize) -> i32;
@@ -35,6 +37,7 @@ extern "system" {
 const SRCCOPY: u32 = 0x00CC0020;
 const DIB_RGB_COLORS: u32 = 0;
 const BI_RGB: u32 = 0;
+const HALFTONE: i32 = 4;
 const SM_CXSCREEN: i32 = 0;
 const SM_CYSCREEN: i32 = 1;
 
@@ -97,61 +100,65 @@ impl Win32StreamCapture {
         result
     }
 
-    /// Capture la fenêtre cible (ou le bureau complet) et génère une vignette BMP encodée en base64
+    /// Capture la fenêtre cible (ou le bureau complet) et génère une vignette BMP de haute fidélité
     pub fn capture_thumbnail_base64(target_hwnd: isize, thumb_w: i32, thumb_h: i32) -> Option<String> {
         #[cfg(target_os = "windows")]
         unsafe {
-            let actual_hwnd = if target_hwnd != 0 && IsWindowVisible(target_hwnd) != 0 && IsIconic(target_hwnd) == 0 {
-                target_hwnd
-            } else {
-                GetDesktopWindow()
-            };
-
-            let hdc_src = GetDC(actual_hwnd);
-            if hdc_src == 0 {
+            let is_target_valid = target_hwnd != 0 && IsWindowVisible(target_hwnd) != 0 && IsIconic(target_hwnd) == 0;
+            
+            // Capture directe depuis le DC Bureau (DWM Compositing DirectX fidèle)
+            let hdc_desktop = GetDC(0);
+            if hdc_desktop == 0 {
                 return None;
             }
 
-            let mut rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-            if actual_hwnd == GetDesktopWindow() {
-                rect.right = GetSystemMetrics(SM_CXSCREEN);
-                rect.bottom = GetSystemMetrics(SM_CYSCREEN);
+            let mut win_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+            if is_target_valid {
+                GetWindowRect(target_hwnd, &mut win_rect);
             } else {
-                GetClientRect(actual_hwnd, &mut rect);
-                if rect.right == 0 || rect.bottom == 0 {
-                    GetWindowRect(actual_hwnd, &mut rect);
-                    rect.right = rect.right - rect.left;
-                    rect.bottom = rect.bottom - rect.top;
-                }
+                win_rect.left = 0;
+                win_rect.top = 0;
+                win_rect.right = GetSystemMetrics(SM_CXSCREEN);
+                win_rect.bottom = GetSystemMetrics(SM_CYSCREEN);
             }
 
-            let src_w = (rect.right).max(64);
-            let src_h = (rect.bottom).max(64);
+            let win_w = (win_rect.right - win_rect.left).max(100);
+            let win_h = (win_rect.bottom - win_rect.top).max(100);
 
-            // Zoom calibré sur le coin supérieur gauche du jeu (Nom de zone, Coordonnées, Niveau)
-            // Région HUD : X de 0.5% à 30%, Y de 0.5% à 12%
-            let (crop_x, crop_y, crop_w, crop_h) = if actual_hwnd != GetDesktopWindow() {
-                let cw = ((src_w as f64) * 0.30).max(180.0) as i32;
-                let ch = ((src_h as f64) * 0.12).max(60.0) as i32;
-                let cx = ((src_w as f64) * 0.005) as i32;
-                let cy = ((src_h as f64) * 0.005) as i32;
-                (cx, cy, cw.min(src_w), ch.min(src_h))
-            } else {
-                (0, 0, src_w, src_h)
-            };
+            // Zone HUD supérieure gauche (Nom de zone, Coordonnées, Niveau HUD)
+            // Cadrage précis : X de 0% à 28% de la largeur, Y de 0% à 10% de la hauteur
+            let crop_x = win_rect.left + ((win_w as f64) * 0.005) as i32;
+            let crop_y = win_rect.top + ((win_h as f64) * 0.005) as i32;
+            let crop_w = ((win_w as f64) * 0.28).max(180.0) as i32;
+            let crop_h = ((win_h as f64) * 0.09).max(50.0) as i32;
 
-            let hdc_mem = CreateCompatibleDC(hdc_src);
-            let hbmp = CreateCompatibleBitmap(hdc_src, thumb_w, thumb_h);
+            let hdc_mem = CreateCompatibleDC(hdc_desktop);
+            let hbmp = CreateCompatibleBitmap(hdc_desktop, thumb_w, thumb_h);
             let old_bmp = SelectObject(hdc_mem, hbmp);
 
-            // StretchBlt zoomé directement depuis la région HUD
-            StretchBlt(hdc_mem, 0, 0, thumb_w, thumb_h, hdc_src, crop_x, crop_y, crop_w, crop_h, SRCCOPY);
+            // Anti-aliasing et interpolation bilinéaire haute fidélité (HALFTONE)
+            SetStretchBltMode(hdc_mem, HALFTONE);
+            SetBrushOrgEx(hdc_mem, 0, 0, std::ptr::null_mut());
+
+            StretchBlt(
+                hdc_mem,
+                0,
+                0,
+                thumb_w,
+                thumb_h,
+                hdc_desktop,
+                crop_x,
+                crop_y,
+                crop_w,
+                crop_h,
+                SRCCOPY,
+            );
 
             let mut bmi = BITMAPINFO {
                 bmi_header: BITMAPINFOHEADER {
                     bi_size: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
                     bi_width: thumb_w,
-                    bi_height: -thumb_h, // Top-down
+                    bi_height: thumb_h, // Bottom-up standard
                     bi_planes: 1,
                     bi_bit_count: 24,
                     bi_compression: BI_RGB,
@@ -180,7 +187,7 @@ impl Win32StreamCapture {
             SelectObject(hdc_mem, old_bmp);
             DeleteObject(hbmp);
             DeleteDC(hdc_mem);
-            ReleaseDC(actual_hwnd, hdc_src);
+            ReleaseDC(0, hdc_desktop);
 
             let bmp_data = Self::encode_bmp(thumb_w, thumb_h, &raw_bytes, row_size);
             let b64 = Self::to_base64(&bmp_data);
@@ -206,7 +213,7 @@ impl Win32StreamCapture {
         // DIB Header (BITMAPINFOHEADER - 40 bytes)
         bmp.extend_from_slice(&40u32.to_le_bytes());
         bmp.extend_from_slice(&width.to_le_bytes());
-        bmp.extend_from_slice(&(-height).to_le_bytes()); // Top-down
+        bmp.extend_from_slice(&height.to_le_bytes()); // Positive height for standard Bottom-up BMP
         bmp.extend_from_slice(&1u16.to_le_bytes()); // Planes
         bmp.extend_from_slice(&24u16.to_le_bytes()); // 24 bpp BGR
         bmp.extend_from_slice(&0u32.to_le_bytes()); // BI_RGB

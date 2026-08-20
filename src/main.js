@@ -93,6 +93,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const editBtnShortcut = document.getElementById('edit-btn-shortcut');
 
     const editBtnAutoEnter = document.getElementById('edit-btn-auto-enter');
+    const groupHarvestConfig = document.getElementById('group-harvest-config');
+    const editHarvestCoords = document.getElementById('edit-harvest-coords');
+    const groupActionValue = document.getElementById('group-action-value');
     const iconPickerGrid = document.getElementById('icon-picker-grid');
 
     const PRESET_ICONS = [
@@ -136,13 +139,14 @@ document.addEventListener('DOMContentLoaded', () => {
             autoEnter: true
         },
         {
-            id: 'btn-salut',
-            icon: '💬',
-            label: 'SALUT',
-            sub: 'Écrit salut',
-            shortcut: 'F2',
-            type: 'chat',
-            value: 'salut',
+            id: 'btn-mining',
+            icon: '⛏️',
+            label: 'MINAGE',
+            sub: 'Carte Actuelle',
+            shortcut: 'F3',
+            type: 'mining_room',
+            harvestResources: ['fer'],
+            value: 'fer',
             autoEnter: true
         },
         {
@@ -150,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
             icon: '🚀',
             label: 'TRAVEL TO',
             sub: '/travel 4,28',
-            shortcut: 'F3',
+            shortcut: 'F4',
             type: 'travel',
             value: '4,28',
             autoEnter: true
@@ -217,6 +221,26 @@ document.addEventListener('DOMContentLoaded', () => {
         closeConfigModal();
     });
 
+    function updateHarvestFormVisibility(selectedType) {
+        if (selectedType === 'harvest' || selectedType === 'mining_room') {
+            if (groupHarvestConfig) groupHarvestConfig.style.display = 'block';
+            if (groupActionValue) groupActionValue.style.display = 'none';
+
+            // Pour mining_room (carte actuelle), on masque la saisie manuelle de coordonnées
+            const coordsGroup = editHarvestCoords?.closest('.form-group');
+            if (coordsGroup) {
+                coordsGroup.style.display = (selectedType === 'harvest') ? 'block' : 'none';
+            }
+        } else {
+            if (groupHarvestConfig) groupHarvestConfig.style.display = 'none';
+            if (groupActionValue) groupActionValue.style.display = 'block';
+        }
+    }
+
+    editBtnType?.addEventListener('change', (e) => {
+        updateHarvestFormVisibility(e.target.value);
+    });
+
     // Ouverture et enregistrement du Modal d'Édition de Bouton
     function openButtonEditModal(slotIndex, btnData) {
         const isConfigBtn = (slotIndex === 0 || btnData.id === 'btn-config' || btnData.type === 'config');
@@ -233,10 +257,24 @@ document.addEventListener('DOMContentLoaded', () => {
         renderIconPicker(btnData.icon || '💬');
         if (editBtnLabel) editBtnLabel.value = btnData.label || `Slot ${slotIndex + 1}`;
         if (editBtnSub) editBtnSub.value = btnData.sub || '';
-        if (editBtnType) editBtnType.value = btnData.type || 'chat';
+        
+        const type = btnData.type || 'chat';
+        if (editBtnType) editBtnType.value = type;
+        updateHarvestFormVisibility(type);
+
         if (editBtnValue) editBtnValue.value = btnData.value || '';
         if (editBtnShortcut) editBtnShortcut.value = btnData.shortcut || `F${slotIndex + 1}`;
         if (editBtnAutoEnter) editBtnAutoEnter.checked = (btnData.autoEnter !== false);
+
+        if (editHarvestCoords) editHarvestCoords.value = btnData.harvestCoords || btnData.value || '4,28';
+        const defaultTarget = (type === 'mining_room') ? ['fer'] : ['cuivre', 'fer'];
+        const targetResources = (btnData.harvestResources && btnData.harvestResources.length > 0)
+            ? btnData.harvestResources
+            : defaultTarget;
+
+        document.querySelectorAll('.harvest-resource-cb').forEach(cb => {
+            cb.checked = targetResources.includes(cb.value);
+        });
 
         buttonEditModal?.classList.add('open');
         autoAdjustWindowSize(true);
@@ -261,6 +299,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const shortcut = editBtnShortcut.value.trim().toUpperCase() || `F${currentEditingSlotIndex + 1}`;
         const autoEnter = editBtnAutoEnter ? editBtnAutoEnter.checked : true;
 
+        const selectedResources = [];
+        document.querySelectorAll('.harvest-resource-cb:checked').forEach(cb => {
+            selectedResources.push(cb.value);
+        });
+        const harvestCoords = editHarvestCoords ? editHarvestCoords.value.trim() : '4,28';
+
         customButtonsConfig[currentEditingSlotIndex] = {
             icon,
             label,
@@ -268,7 +312,9 @@ document.addEventListener('DOMContentLoaded', () => {
             type,
             value,
             shortcut,
-            autoEnter
+            autoEnter,
+            harvestCoords,
+            harvestResources: selectedResources
         };
 
         saveButtonsConfig();
@@ -317,6 +363,47 @@ document.addEventListener('DOMContentLoaded', () => {
                 payload: { x, y }
             });
             console.log(`[StreamDeck IPC -> Le Scaphandre] Travel: ${travelCmd}`);
+        } else if (type === 'mining_room') {
+            const resources = (btnData.harvestResources && btnData.harvestResources.length > 0)
+                ? btnData.harvestResources
+                : ['fer'];
+            const resText = resources.join(', ');
+            if (activeScriptLabel) activeScriptLabel.innerText = `⛏️ Minage Carte: [${resText}]`;
+
+            await invokeTauri('send_ipc_message', {
+                agent: 'cerveau',
+                action: 'mine_current_room',
+                payload: {
+                    resources: resources
+                }
+            });
+            console.log(`[StreamDeck IPC -> Le Cerveau] Macro Minage Carte Actuelle démarrée pour minerais:`, resources);
+        } else if (type === 'harvest') {
+            const harvestCoords = btnData.harvestCoords || val || '4,28';
+            const coords = harvestCoords.split(',').map(s => parseInt(s.trim(), 10));
+            const x = !isNaN(coords[0]) ? coords[0] : 4;
+            const y = !isNaN(coords[1]) ? coords[1] : 28;
+            const resources = btnData.harvestResources || ['copper_ore', 'iron_ore'];
+
+            if (activeScriptLabel) activeScriptLabel.innerText = `🌾 Récolte [${x},${y}] (${resources.length} res.)`;
+            
+            // 1. Envoi de la commande de déplacement /travel vers la tuile surveillée
+            await invokeTauri('send_ipc_message', {
+                agent: 'scaphandre',
+                action: 'travel_to',
+                payload: { x, y }
+            });
+
+            // 2. Activation du mode Récolte multi-agents
+            await invokeTauri('send_ipc_message', {
+                agent: 'cerveau',
+                action: 'start_harvest_mode',
+                payload: {
+                    target_coords: [x, y],
+                    resources: resources
+                }
+            });
+            console.log(`[StreamDeck IPC -> Le Cerveau] Mode Récolte activé sur [${x}, ${y}] avec ressources:`, resources);
         } else if (type === 'stop') {
             if (activeScriptLabel) activeScriptLabel.innerText = 'STOP';
             await invokeTauri('trigger_emergency_stop');
@@ -330,6 +417,73 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             console.log(`[StreamDeck IPC] Action personnalisée: ${btnData.label}`);
         }
+    }
+
+    async function handlePadPlayPause(pad, btnData) {
+        if (btnData.type === 'config') {
+            openConfigModal();
+            return;
+        }
+        if (btnData.type === 'stop') {
+            handlePadStop(pad, btnData);
+            return;
+        }
+
+        const isRunning = pad.classList.contains('running');
+        const isPaused = pad.classList.contains('paused');
+        const statusBadge = pad.querySelector('.pad-status-badge');
+
+        if (isRunning) {
+            // Clic Gauche sur Macro Active -> Pause
+            pad.classList.remove('running');
+            pad.classList.add('paused');
+            if (statusBadge) statusBadge.innerText = 'PAUSE';
+            if (activeScriptLabel) activeScriptLabel.innerText = `⏸️ Pause: ${btnData.label}`;
+            await invokeTauri('set_supervisor_state', { newState: 'Paused' });
+            await invokeTauri('send_ipc_message', {
+                agent: 'cerveau',
+                action: 'pause_macro',
+                payload: { id: btnData.id }
+            });
+            console.log(`[StreamDeck] Clic Gauche -> Macro '${btnData.label}' mise en PAUSE.`);
+        } else if (isPaused) {
+            // Clic Gauche sur Macro en Pause -> Reprise (Play)
+            pad.classList.remove('paused');
+            pad.classList.add('running');
+            if (statusBadge) statusBadge.innerText = 'RUN';
+            if (activeScriptLabel) activeScriptLabel.innerText = `▶️ Reprise: ${btnData.label}`;
+            await invokeTauri('set_supervisor_state', { newState: 'Harvesting' });
+            await invokeTauri('send_ipc_message', {
+                agent: 'cerveau',
+                action: 'resume_macro',
+                payload: { id: btnData.id }
+            });
+            console.log(`[StreamDeck] Clic Gauche -> Macro '${btnData.label}' REPRISE.`);
+        } else {
+            // Clic Gauche sur Macro Inactive -> Démarrage (Play)
+            gridContainer?.querySelectorAll('.deck-pad').forEach(p => {
+                p.classList.remove('running', 'paused');
+            });
+            pad.classList.add('running');
+            if (statusBadge) statusBadge.innerText = 'RUN';
+            await executeButtonAction(btnData);
+        }
+    }
+
+    async function handlePadStop(pad, btnData) {
+        // Clic Droit -> Arrêt Immédiat (Stop)
+        pad.classList.remove('running', 'paused');
+        pad.classList.add('stopped-flash');
+        setTimeout(() => pad.classList.remove('stopped-flash'), 400);
+
+        if (activeScriptLabel) activeScriptLabel.innerText = `⏹️ STOP: ${btnData.label || 'Macro'}`;
+        await invokeTauri('trigger_emergency_stop');
+        await invokeTauri('send_ipc_message', {
+            agent: 'cerveau',
+            action: 'stop_macro',
+            payload: { id: btnData.id }
+        });
+        console.log(`[StreamDeck] Clic Droit -> STOP immédiat pour '${btnData.label}'.`);
     }
 
     // Rendu dynamique de la grille selon rows x cols
@@ -402,6 +556,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const showSub = !isMini && Boolean(btnData.sub);
 
             pad.innerHTML = `
+                <span class="pad-status-badge">RUN</span>
                 <div class="pad-icon" style="font-size: ${iconSize};">${btnData.icon}</div>
                 <div class="pad-label" style="font-size: ${labelSize};">${btnData.label}</div>
                 ${showSub ? `<div class="pad-sub">${btnData.sub}</div>` : ''}
@@ -409,23 +564,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="long-press-progress"></div>
             `;
 
-            // Gestion de l'Appui Long (2 secondes = 2000 ms)
+            // Gestion de l'Appui Long (1 seconde = 1000 ms) pour la configuration
             let pressTimer = null;
             let isLongPress = false;
 
             const startPress = (e) => {
-                if (e.button !== 0 && e.type === 'pointerdown') return;
+                if (e.button !== 0) return; // Uniquement clic gauche pour l'appui long
                 isLongPress = false;
                 pad.classList.add('pressing');
 
-                // Ni CONFIG (index 0) ni STOP (index 1) ne déclenchent la modale d'édition
-                if (i > 1) {
-                    pressTimer = setTimeout(() => {
-                        isLongPress = true;
-                        pad.classList.remove('pressing');
+                pressTimer = setTimeout(() => {
+                    isLongPress = true;
+                    pad.classList.remove('pressing');
+                    if (btnData.type === 'config') {
+                        openConfigModal();
+                    } else {
                         openButtonEditModal(i, btnData);
-                    }, 1000);
-                }
+                    }
+                }, 1000);
             };
 
             const cancelPress = () => {
@@ -436,16 +592,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 pad.classList.remove('pressing');
             };
 
+            // 1. Clic Gauche : Play / Pause (court) ou Configuration (long)
             pad.addEventListener('pointerdown', startPress);
             pad.addEventListener('pointerup', (e) => {
+                if (e.button !== 0) return;
                 cancelPress();
                 if (!isLongPress) {
                     triggerPadFeedback(pad);
-                    executeButtonAction(btnData);
+                    handlePadPlayPause(pad, btnData);
                 }
             });
             pad.addEventListener('pointerleave', cancelPress);
             pad.addEventListener('pointercancel', cancelPress);
+
+            // 2. Clic Droit : Stop Immédiat
+            pad.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                cancelPress();
+                handlePadStop(pad, btnData);
+            });
 
             gridContainer.appendChild(pad);
         }
@@ -466,7 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Hauteur de base de la fenêtre
         const gridHeight = (rows * h) + ((rows - 1) * 10);
-        let targetHeight = 145 + gridHeight + 34 + 24 + 35;
+        let targetHeight = 195 + gridHeight + 34 + 24 + 35;
 
         // Si une modale est ouverte, on passe la hauteur à 620px pour tout afficher sans scrollbar
         if (isModalOpen) {
@@ -491,13 +656,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Éléments du Flux Visuel
     const streamThumbnailImg = document.getElementById('stream-thumbnail-img');
 
-    // Actualisation périodique du titre, de la tuile active et du nombre de plots de changement de carte
+    // Actualisation périodique du titre, du flux vidéo et des métadonnées de la carte
     async function updateActiveWindowStream() {
         try {
             const thumb = await invokeTauri('get_stream_thumbnail');
             if (thumb) {
-                if (thumb.title && previewWindowTitle) {
-                    previewWindowTitle.innerText = thumb.title;
+                if (previewWindowTitle) {
+                    previewWindowTitle.innerText = thumb.title || 'Détection...';
                 }
                 if (thumb.data_url && streamThumbnailImg) {
                     streamThumbnailImg.src = thumb.data_url;
@@ -505,10 +670,19 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const mapInfo = await invokeTauri('get_current_map_info');
-            if (mapInfo && sunNodesBadge) {
-                const count = mapInfo.sun_nodes_count || 0;
-                const text = count === 1 ? '☀️ 1 plot' : `☀️ ${count} plots`;
-                sunNodesBadge.innerText = text;
+            if (mapInfo && mapInfo.is_detected && mapInfo.pos_x !== null && mapInfo.pos_y !== null) {
+                if (mapCoords) mapCoords.innerText = `[${mapInfo.pos_x}, ${mapInfo.pos_y}]`;
+                if (mapZoneName) mapZoneName.innerText = mapInfo.zone_name || '--';
+                if (mapLevel) mapLevel.innerText = mapInfo.area_level ? `Niv. ${mapInfo.area_level}` : '--';
+                if (sunNodesBadge) {
+                    const count = mapInfo.sun_nodes_count || 0;
+                    sunNodesBadge.innerText = count === 1 ? '1 plot' : `${count} plots`;
+                }
+            } else {
+                if (mapCoords) mapCoords.innerText = '--';
+                if (mapZoneName) mapZoneName.innerText = '--';
+                if (mapLevel) mapLevel.innerText = '--';
+                if (sunNodesBadge) sunNodesBadge.innerText = '--';
             }
         } catch (err) {
             console.debug("Erreur rafraîchissement flux visuel / map info:", err);
@@ -516,6 +690,209 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     updateActiveWindowStream();
     setInterval(updateActiveWindowStream, 400);
+
+    // =========================================================================
+    // Gestion de la Synthèse Cartographique & SLAM Cognitif
+    // =========================================================================
+    const mapSynthModal = document.getElementById('map-synthesis-modal');
+    const btnOpenMapSynth = document.getElementById('btn-open-map-synth');
+    const tileInfoBadge = document.getElementById('tile-info-badge');
+    const footerMapSynthBtn = document.getElementById('footer-map-synth-btn');
+    const btnCloseMapSynth = document.getElementById('btn-close-map-synth');
+    const btnCloseMapSynthAction = document.getElementById('btn-close-map-synth-action');
+    const btnSynthInspectRoom = document.getElementById('btn-synth-inspect-room');
+
+    const synthZoneName = document.getElementById('synth-zone-name');
+    const synthZoneSub = document.getElementById('synth-zone-sub');
+    const synthCoordsVal = document.getElementById('synth-coords-val');
+    const synthLevelVal = document.getElementById('synth-level-val');
+    const synthOresList = document.getElementById('synth-ores-list');
+    const synthOresCount = document.getElementById('synth-ores-count');
+    const synthExitsList = document.getElementById('synth-exits-list');
+    const synthExitsCount = document.getElementById('synth-exits-count');
+    const synthMobsList = document.getElementById('synth-mobs-list');
+    const synthMobsCount = document.getElementById('synth-mobs-count');
+    const synthRadarGrid = document.getElementById('synth-radar-grid');
+
+    // Base de Connaissance Locale / Synthèse Dynamique par Coordonnées
+    const SLAM_MAP_DATABASE = {
+        "-3,9": {
+            zone: "Mine Istairameur",
+            sub: "Étage Souterrain • Salle Centrale (Baril TNT)",
+            coords: "[-3, 9]",
+            level: "Niv. 120",
+            ores: [
+                { name: "Bronze (Niv. 40)", count: 6, status: "3 Disponibles • 3 Épuisés", pillClass: "pill-avail" },
+                { name: "Fer (Niv. 1)", count: 1, status: "Disponible", pillClass: "pill-avail" }
+            ],
+            exits: [
+                { name: "Sortie Nord (Galerie)", target: "[-3, 8]", type: "Nord ↑", pillClass: "pill-exit" },
+                { name: "Sortie Sud (Voie ferrée)", target: "[-3, 10]", type: "Sud ↓", pillClass: "pill-exit" },
+                { name: "Plots de Soleil (☀️)", target: "Transitions Directes", type: "2 Soleils", pillClass: "pill-exit" }
+            ],
+            mobs: [
+                { name: "Mineurs Sombres", level: "Niv. 35 - 48", threat: "🛡️ Passif", pillClass: "pill-passive" },
+                { name: "Chauve-souris des Mines", level: "Niv. 28 - 36", threat: "🛡️ Neutre", pillClass: "pill-passive" }
+            ]
+        },
+        "4,28": {
+            zone: "Amakna (Souterrains)",
+            sub: "Mine des Craqueleurs • Salle d'Entrée",
+            coords: "[4, 28]",
+            level: "Niv. 1",
+            ores: [
+                { name: "Cuivre (Niv. 20)", count: 4, status: "Disponible", pillClass: "pill-avail" },
+                { name: "Fer (Niv. 1)", count: 3, status: "Disponible", pillClass: "pill-avail" }
+            ],
+            exits: [
+                { name: "Passage Est", target: "[5, 28]", type: "Est →", pillClass: "pill-exit" },
+                { name: "Galerie Ouest", target: "[3, 28]", type: "Ouest ←", pillClass: "pill-exit" }
+            ],
+            mobs: [
+                { name: "Arakné Mineuse", level: "Niv. 12 - 18", threat: "🛡️ Passif", pillClass: "pill-passive" }
+            ]
+        }
+    };
+
+    function renderMapSynthesis(tileKey = "-3,9") {
+        const data = SLAM_MAP_DATABASE[tileKey] || {
+            zone: mapZoneName?.innerText || "Zone Inconnue",
+            sub: "Tuile Découverte",
+            coords: mapCoords?.innerText || "[0, 0]",
+            level: mapLevel?.innerText || "Niv. 1",
+            ores: [
+                { name: "Bronze (Niv. 40)", count: 6, status: "6 Filons Répertoriés", pillClass: "pill-avail" }
+            ],
+            exits: [
+                { name: "Sorties Détectées", target: "Graphe", type: "Soleils ☀️", pillClass: "pill-exit" }
+            ],
+            mobs: [
+                { name: "Aucune menace détectée", level: "Calme", threat: "🛡️ Sûr", pillClass: "pill-passive" }
+            ]
+        };
+
+        if (synthZoneName) synthZoneName.innerText = data.zone;
+        if (synthZoneSub) synthZoneSub.innerText = data.sub;
+        if (synthCoordsVal) synthCoordsVal.innerText = data.coords;
+        if (synthLevelVal) synthLevelVal.innerText = data.level;
+
+        // Rendu Ressources
+        if (synthOresList) {
+            synthOresList.innerHTML = data.ores.map(o => `
+                <div class="synth-item-row">
+                    <span class="synth-item-name">⛏️ ${o.name}</span>
+                    <span class="synth-status-pill ${o.pillClass}">${o.status}</span>
+                </div>
+            `).join('');
+        }
+        if (synthOresCount) {
+            const totalCount = data.ores.reduce((acc, curr) => acc + (curr.count || 1), 0);
+            synthOresCount.innerText = `${totalCount} filons`;
+        }
+
+        // Rendu Sorties
+        if (synthExitsList) {
+            synthExitsList.innerHTML = data.exits.map(e => `
+                <div class="synth-item-row">
+                    <span class="synth-item-name">🚪 ${e.name}</span>
+                    <span class="synth-status-pill ${e.pillClass}">${e.type} (${e.target})</span>
+                </div>
+            `).join('');
+        }
+        if (synthExitsCount) {
+            synthExitsCount.innerText = `${data.exits.length} sorties`;
+        }
+
+        // Rendu Monstres
+        if (synthMobsList) {
+            synthMobsList.innerHTML = data.mobs.map(m => `
+                <div class="synth-item-row">
+                    <span class="synth-item-name">👾 ${m.name} (${m.level})</span>
+                    <span class="synth-status-pill ${m.pillClass}">${m.threat}</span>
+                </div>
+            `).join('');
+        }
+        if (synthMobsCount) {
+            synthMobsCount.innerText = `${data.mobs.length} groupes`;
+        }
+
+        // Rendu Radar 3x3
+        renderRadarGrid(data.coords);
+    }
+
+    function renderRadarGrid(currentCoordsStr) {
+        if (!synthRadarGrid) return;
+        const match = currentCoordsStr.match(/\[?\s*(-?\d+)\s*,\s*(-?\d+)\s*\]?/);
+        const curX = match ? parseInt(match[1], 10) : -3;
+        const curY = match ? parseInt(match[2], 10) : 9;
+
+        const cells = [];
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                const tx = curX + dx;
+                const ty = curY + dy;
+                const key = `${tx},${ty}`;
+                const isCurrent = (dx === 0 && dy === 0);
+                const hasData = SLAM_MAP_DATABASE[key] !== undefined;
+
+                cells.push(`
+                    <div class="radar-tile-cell ${isCurrent ? 'current-tile' : ''}" data-key="${key}">
+                        <span class="radar-tile-coords">[${tx}, ${ty}]</span>
+                        <span class="radar-tile-sub">${isCurrent ? '📍 ICI' : (hasData ? '⛏️ 6 filons' : '❓ Inconnu')}</span>
+                    </div>
+                `);
+            }
+        }
+        synthRadarGrid.innerHTML = cells.join('');
+
+        synthRadarGrid.querySelectorAll('.radar-tile-cell').forEach(cell => {
+            cell.addEventListener('click', () => {
+                const k = cell.getAttribute('data-key');
+                if (k) renderMapSynthesis(k);
+            });
+        });
+    }
+
+    function openMapSynthesis() {
+        if (!mapSynthModal) return;
+        const curCoords = mapCoords?.innerText.replace(/[\[\]]/g, '').trim() || "-3,9";
+        renderMapSynthesis(curCoords);
+        mapSynthModal.classList.add('open');
+    }
+
+    function closeMapSynthesis() {
+        if (mapSynthModal) mapSynthModal.classList.remove('open');
+    }
+
+    if (tileInfoBadge) tileInfoBadge.addEventListener('click', openMapSynthesis);
+    if (btnOpenMapSynth) btnOpenMapSynth.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openMapSynthesis();
+    });
+    if (footerMapSynthBtn) footerMapSynthBtn.addEventListener('click', openMapSynthesis);
+    if (btnCloseMapSynth) btnCloseMapSynth.addEventListener('click', closeMapSynthesis);
+    if (btnCloseMapSynthAction) btnCloseMapSynthAction.addEventListener('click', closeMapSynthesis);
+
+    if (btnSynthInspectRoom) {
+        btnSynthInspectRoom.addEventListener('click', () => {
+            if (activeScriptLabel) {
+                activeScriptLabel.innerText = "🔍 Inspection Filon (Noxine + Scaphandre)";
+            }
+            // Feedback visuel et fermeture
+            btnSynthInspectRoom.innerText = "⚡ Balayage en cours...";
+            setTimeout(() => {
+                btnSynthInspectRoom.innerText = "🔍 Inspecter la Salle (Noxine + Scaphandre)";
+                closeMapSynthesis();
+            }, 800);
+        });
+    }
+
+    // Fermeture en cliquant à l'extérieur
+    window.addEventListener('click', (e) => {
+        if (e.target === mapSynthModal) {
+            closeMapSynthesis();
+        }
+    });
 
     // Raccourcis clavier globaux
     window.addEventListener('keydown', (e) => {
@@ -530,6 +907,16 @@ document.addEventListener('DOMContentLoaded', () => {
             lastKeyBadge.innerText = keyDisplay;
             lastKeyBadge.classList.add('pressed');
             setTimeout(() => lastKeyBadge.classList.remove('pressed'), 300);
+        }
+
+        // Touche 'M' pour basculer la Synthèse Cartographique
+        if ((e.key === 'm' || e.key === 'M') && !document.querySelector('input:focus')) {
+            e.preventDefault();
+            if (mapSynthModal?.classList.contains('open')) {
+                closeMapSynthesis();
+            } else {
+                openMapSynthesis();
+            }
         }
 
         // Interception des flèches directionnelles pour le swipe opposé de changement de carte
@@ -561,7 +948,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (matchingPad) {
             e.preventDefault();
             triggerPadFeedback(matchingPad);
-            // Simuler la récréation de l'action du pad
             matchingPad.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 }));
             setTimeout(() => {
                 matchingPad.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, button: 0 }));
