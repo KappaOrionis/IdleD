@@ -45,35 +45,40 @@ class OreDetector(BaseObjectDetector):
         # Application du masque centralisé de découpage du terrain jouable
         combined_mask = self.layout.apply_to_mask(combined_mask)
 
-        # Nettoyage morphologique
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (4, 4))
-        cleaned = cv2.morphologyEx(combined_mask, cv2.MORPH_OPEN, kernel, iterations=1)
-        cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_DILATE, kernel, iterations=2)
+        # Nettoyage et fermeture morphologique pour unifier chaque filon
+        kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (10, 10))
+        closed = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel_close, iterations=2)
+        cleaned = cv2.dilate(closed, kernel_close, iterations=1)
 
         contours, _ = cv2.findContours(cleaned, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         detections = []
         for cnt in contours:
             area = cv2.contourArea(cnt)
-            # Surface d'un filon/roche de minerai (typique 100 px² à 6000 px²)
-            if 100 <= area <= 6000:
+            if area >= 100:
+                M = cv2.moments(cnt)
+                if M["m00"] > 0:
+                    cx = int(M["m10"] / M["m00"])
+                    cy = int(M["m01"] / M["m00"])
+                else:
+                    bx, by, bw, bh = cv2.boundingRect(cnt)
+                    cx = int(bx + bw // 2)
+                    cy = int(by + bh // 2)
+
                 bx, by, bw, bh = cv2.boundingRect(cnt)
-                aspect_ratio = float(bw) / bh if bh > 0 else 0
-                
-                if 0.4 <= aspect_ratio <= 2.8:
-                    confidence = round(min(0.99, 0.55 + (area / 4000.0) * 0.40), 2)
-                    detections.append({
-                        "x": int(bx + bw // 2),
-                        "y": int(by + bh // 2),
-                        "w": int(bw),
-                        "h": int(bh),
-                        "area": float(area),
-                        "confidence": confidence
-                    })
+                confidence = round(min(0.99, 0.55 + (area / 5000.0) * 0.44), 2)
+                detections.append({
+                    "x": cx,
+                    "y": cy,
+                    "w": int(bw),
+                    "h": int(bh),
+                    "area": float(area),
+                    "confidence": confidence
+                })
 
         # Filtrage des doublons proches
         filtered = []
-        for det in detections:
+        for det in sorted(detections, key=lambda d: (d["y"], d["x"])):
             duplicate = False
             for existing in filtered:
                 dist = np.sqrt((det["x"] - existing["x"])**2 + (det["y"] - existing["y"])**2)
@@ -94,7 +99,7 @@ class OreDetector(BaseObjectDetector):
     def detect_from_differential_frames(self, frame_normal: Optional[np.ndarray], frame_highlight: Optional[np.ndarray]) -> Dict[str, Any]:
         """
         Détecte les gisements interactifs par analyse différentielle entre la frame standard (Étape 1)
-        et la frame avec surbrillance touche 'Y' (Étape 2).
+        et la frame avec surbrillance touche 'Y' (Étape 2), avec calcul du barycentre exact.
         """
         if frame_highlight is None or not isinstance(frame_highlight, np.ndarray) or frame_highlight.size == 0:
             return self.detect(frame_normal)
@@ -105,7 +110,7 @@ class OreDetector(BaseObjectDetector):
         # Calcul de la différence absolue entre les deux frames (met en valeur les halos apparus avec 'Y')
         diff = cv2.absdiff(frame_highlight, frame_normal)
         gray_diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
-        _, thresh_diff = cv2.threshold(gray_diff, 25, 255, cv2.THRESH_BINARY)
+        _, thresh_diff = cv2.threshold(gray_diff, 18, 255, cv2.THRESH_BINARY)
 
         # Masque couleur classique sur la frame de surbrillance
         hsv = cv2.cvtColor(frame_highlight, cv2.COLOR_BGR2HSV)
@@ -119,29 +124,36 @@ class OreDetector(BaseObjectDetector):
         # Application du masque centralisé du terrain jouable
         combined = self.layout.apply_to_mask(combined)
 
-        # Nettoyage morphologique
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (4, 4))
-        cleaned = cv2.morphologyEx(combined, cv2.MORPH_OPEN, kernel, iterations=1)
-        cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_DILATE, kernel, iterations=2)
+        # Fermeture morphologique pour fusionner les contours pointillés d'un même filon
+        kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (10, 10))
+        closed = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, kernel_close, iterations=2)
+        cleaned = cv2.dilate(closed, kernel_close, iterations=1)
 
         contours, _ = cv2.findContours(cleaned, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         detections = []
         for cnt in contours:
             area = cv2.contourArea(cnt)
-            if 80 <= area <= 7000:
+            if area >= 100:
+                M = cv2.moments(cnt)
+                if M["m00"] > 0:
+                    cx = int(M["m10"] / M["m00"])
+                    cy = int(M["m01"] / M["m00"])
+                else:
+                    bx, by, bw, bh = cv2.boundingRect(cnt)
+                    cx = int(bx + bw // 2)
+                    cy = int(by + bh // 2)
+
                 bx, by, bw, bh = cv2.boundingRect(cnt)
-                aspect_ratio = float(bw) / bh if bh > 0 else 0
-                if 0.35 <= aspect_ratio <= 3.0:
-                    confidence = round(min(0.99, 0.60 + (area / 4000.0) * 0.39), 2)
-                    detections.append({
-                        "x": int(bx + bw // 2),
-                        "y": int(by + bh // 2),
-                        "w": int(bw),
-                        "h": int(bh),
-                        "area": float(area),
-                        "confidence": confidence
-                    })
+                confidence = round(min(0.99, 0.60 + (area / 5000.0) * 0.39), 2)
+                detections.append({
+                    "x": cx,
+                    "y": cy,
+                    "w": int(bw),
+                    "h": int(bh),
+                    "area": float(area),
+                    "confidence": confidence
+                })
 
         # Filtrage des doublons proches
         filtered = []

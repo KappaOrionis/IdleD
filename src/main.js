@@ -673,6 +673,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Éléments du Flux Visuel
     const streamThumbnailImg = document.getElementById('stream-thumbnail-img');
+    const streamUnavailablePlaceholder = document.getElementById('stream-unavailable-placeholder');
 
     // Actualisation périodique du titre, du flux vidéo et des métadonnées de la carte
     async function updateActiveWindowStream() {
@@ -682,8 +683,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (previewWindowTitle) {
                     previewWindowTitle.innerText = thumb.title || 'Détection...';
                 }
-                if (thumb.data_url && streamThumbnailImg) {
+                if (thumb.is_valid && thumb.data_url && streamThumbnailImg) {
                     streamThumbnailImg.src = thumb.data_url;
+                    streamThumbnailImg.style.display = 'block';
+                    if (streamUnavailablePlaceholder) {
+                        streamUnavailablePlaceholder.style.display = 'none';
+                    }
+                } else {
+                    if (streamThumbnailImg) {
+                        streamThumbnailImg.src = '';
+                        streamThumbnailImg.style.display = 'none';
+                    }
+                    if (streamUnavailablePlaceholder) {
+                        streamUnavailablePlaceholder.style.display = 'flex';
+                    }
+                }
+            } else {
+                if (streamThumbnailImg) {
+                    streamThumbnailImg.src = '';
+                    streamThumbnailImg.style.display = 'none';
+                }
+                if (streamUnavailablePlaceholder) {
+                    streamUnavailablePlaceholder.style.display = 'flex';
                 }
             }
 

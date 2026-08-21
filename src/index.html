@@ -17,9 +17,13 @@
                 <span class="preview-title" id="preview-window-title">Détection...</span>
             </div>
 
-            <!-- 2. Vignette de Capture du Flux Visuel (Entre les deux) -->
-            <div class="stream-thumbnail-container" id="stream-thumbnail-container" title="Flux de Reconnaissance Visuelle (DXGI / OCR Live)">
-                <img id="stream-thumbnail-img" class="stream-thumbnail-img" alt="Capture Flux" src="" />
+            <!-- 2. Vignette de Capture du Flux Visuel (Perception Zone & Coordonnées) -->
+            <div class="stream-thumbnail-container" id="stream-thumbnail-container" title="Flux direct de détection de la zone & coordonnées (Top-Left HUD)">
+                <div class="stream-unavailable-placeholder" id="stream-unavailable-placeholder">
+                    <span class="unavailable-icon">⚠️</span>
+                    <span class="unavailable-text">Flux indisponible</span>
+                </div>
+                <img id="stream-thumbnail-img" class="stream-thumbnail-img" alt="Flux Détection Zone" src="" style="display: none;" />
             </div>
 
             <!-- 3. Informations de la Tuile en Colonne (Position, Zone, Niveau, Nb Plot, Synthèse) avant les boutons de macro -->

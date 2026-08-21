@@ -98,22 +98,30 @@ class MapHUDReader:
 
     def extract_from_frame(self, frame: Optional[np.ndarray]) -> Dict[str, Any]:
         """
-        Extrait les informations HUD à partir de l'image de la fenêtre de jeu.
+        Extrait les informations HUD à partir de l'image de la fenêtre de jeu via RapidOCR.
         """
         if frame is None or not isinstance(frame, np.ndarray) or frame.size == 0:
             return self.parse_hud_text(None, None)
 
-        # Cadrage sur le coin supérieur gauche HUD (0% à 25% X, 0% à 8% Y)
+        # Cadrage sur le coin supérieur gauche HUD (0% à 25% X, 0% à 12% Y)
         h, w = frame.shape[:2]
         crop_w = int(w * 0.25)
-        crop_h = int(h * 0.08)
+        crop_h = int(h * 0.12)
         crop = frame[0:crop_h, 0:crop_w]
 
-        # Traitement colorimétrique (texte blanc brillant sur fond sombre)
+        try:
+            from agents.vision.ocr_engine import IdleDOCREngine
+            ocr = IdleDOCREngine.get_instance()
+            text = ocr.extract_text(crop)
+            if text and len(text.strip()) > 0:
+                return self.parse_hud_text(text)
+        except Exception:
+            pass
+
+        # Traitement colorimétrique de repli (texte blanc brillant sur fond sombre)
         gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
         _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
 
-        # Détection de présence de texte HUD
         white_pixels = cv2.countNonZero(thresh)
         if white_pixels < 20:
             return self.parse_hud_text(None, None)

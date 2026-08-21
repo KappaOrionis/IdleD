@@ -128,10 +128,10 @@ impl Win32StreamCapture {
             let client_w = (client_rect.right - client_rect.left).max(100);
             let client_h = (client_rect.bottom - client_rect.top).max(100);
 
-            let crop_x = pt.x + 4;
-            let crop_y = pt.y + 4;
-            let crop_w = ((client_w as f64) * 0.24).min(360.0).max(200.0) as i32;
-            let crop_h = ((client_h as f64) * 0.12).min(130.0).max(75.0) as i32;
+            let crop_x = pt.x + 6;
+            let crop_y = pt.y + 6;
+            let crop_w = ((client_w as f64) * 0.22).min(320.0).max(220.0) as i32;
+            let crop_h = ((client_h as f64) * 0.10).min(90.0).max(56.0) as i32;
 
             let hdc_mem = CreateCompatibleDC(hdc_desktop);
             let hbmp = CreateCompatibleBitmap(hdc_desktop, thumb_w, thumb_h);
@@ -254,6 +254,344 @@ impl Win32StreamCapture {
         {
             let _ = (target_hwnd, window_title, thumb_w, thumb_h);
             (None, crate::fsm::MapInfo::none())
+        }
+    }
+
+    /// Capture un buffer RGB 24bpp de la fenêtre cible pour analyse différentielle
+    pub fn capture_frame_buffer_rgb(
+        target_hwnd: isize,
+        origin_x: i32,
+        origin_y: i32,
+        client_w: i32,
+        client_h: i32,
+        scan_w: i32,
+        scan_h: i32
+    ) -> Option<(Vec<u8>, usize)> {
+        #[cfg(target_os = "windows")]
+        unsafe {
+            if target_hwnd == 0 || IsWindowVisible(target_hwnd) == 0 || IsIconic(target_hwnd) != 0 {
+                return None;
+            }
+
+            let hdc_desktop = GetDC(0);
+            if hdc_desktop == 0 {
+                return None;
+            }
+
+            let hdc_mem = CreateCompatibleDC(hdc_desktop);
+            let hbmp = CreateCompatibleBitmap(hdc_desktop, scan_w, scan_h);
+            let old_bmp = SelectObject(hdc_mem, hbmp);
+
+            SetStretchBltMode(hdc_mem, HALFTONE);
+            SetBrushOrgEx(hdc_mem, 0, 0, std::ptr::null_mut());
+
+            StretchBlt(
+                hdc_mem,
+                0,
+                0,
+                scan_w,
+                scan_h,
+                hdc_desktop,
+                origin_x,
+                origin_y,
+                client_w,
+                client_h,
+                SRCCOPY,
+            );
+
+            let mut bmi = BITMAPINFO {
+                bmi_header: BITMAPINFOHEADER {
+                    bi_size: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                    bi_width: scan_w,
+                    bi_height: scan_h,
+                    bi_planes: 1,
+                    bi_bit_count: 24,
+                    bi_compression: BI_RGB,
+                    bi_size_image: 0,
+                    bi_x_pels_per_meter: 0,
+                    bi_y_pels_per_meter: 0,
+                    bi_clr_used: 0,
+                    bi_clr_important: 0,
+                },
+                bmi_colors: [0],
+            };
+
+            let row_size = ((scan_w * 3 + 3) & !3) as usize;
+            let mut raw_bytes = vec![0u8; row_size * scan_h as usize];
+
+            GetDIBits(
+                hdc_mem,
+                hbmp,
+                0,
+                scan_h as u32,
+                raw_bytes.as_mut_ptr(),
+                &mut bmi,
+                DIB_RGB_COLORS,
+            );
+
+            SelectObject(hdc_mem, old_bmp);
+            DeleteObject(hbmp);
+            DeleteDC(hdc_mem);
+            ReleaseDC(0, hdc_desktop);
+
+            Some((raw_bytes, row_size))
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = (target_hwnd, origin_x, origin_y, client_w, client_h, scan_w, scan_h);
+            None
+        }
+    }
+
+    /// Détection DIFFÉRENTIELLE dynamique des barycentres réels de toutes les ressources surbrillantes (Touche 'Y')
+    pub fn extract_differential_barycentres(
+        frame_natural: &Option<(Vec<u8>, usize)>,
+        frame_highlight: &Option<(Vec<u8>, usize)>,
+        origin_x: i32,
+        origin_y: i32,
+        client_w: i32,
+        client_h: i32,
+        scan_w: i32,
+        scan_h: i32
+    ) -> Vec<(i32, i32, String, String)> {
+        let (raw_high, row_size) = match frame_highlight {
+            Some((ref b, rs)) => (b, *rs),
+            None => return Vec::new(),
+        };
+
+        let raw_nat = frame_natural.as_ref().map(|(b, _)| b);
+
+        let bin_size = 12i32;
+        let mut grid_bins = std::collections::HashMap::<(i32, i32), (f64, f64, u32)>::new();
+
+        for top_y in 0..scan_h {
+            let scan_y = scan_h - 1 - top_y;
+            let rel_y = top_y as f64 / scan_h as f64;
+
+            // Filtre vertical : terrain de jeu actif
+            if rel_y < 0.12 || rel_y > 0.80 {
+                continue;
+            }
+
+            let row_offset = scan_y as usize * row_size;
+            for x in 0..scan_w {
+                let rel_x = x as f64 / scan_w as f64;
+
+                // Filtre horizontal : exclut les volets latéraux et chat
+                if rel_x < 0.14 || rel_x > 0.86 {
+                    continue;
+                }
+                // Filtre mini-carte bas droite
+                if rel_x > 0.70 && rel_y > 0.68 {
+                    continue;
+                }
+
+                let offset = row_offset + (x as usize * 3);
+                if offset + 2 < raw_high.len() {
+                    let b2 = raw_high[offset] as i32;
+                    let g2 = raw_high[offset + 1] as i32;
+                    let r2 = raw_high[offset + 2] as i32;
+
+                    let is_active_highlight = if let Some(nat) = raw_nat {
+                        if offset + 2 < nat.len() {
+                            let b1 = nat[offset] as i32;
+                            let g1 = nat[offset + 1] as i32;
+                            let r1 = nat[offset + 2] as i32;
+                            let diff_gray = ((r2 - r1).abs() * 299 + (g2 - g1).abs() * 587 + (b2 - b1).abs() * 114) / 1000;
+                            diff_gray >= 15
+                        } else {
+                            false
+                        }
+                    } else {
+                        let lum = (r2 * 299 + g2 * 587 + b2 * 114) / 1000;
+                        lum > 170
+                    };
+
+                    if is_active_highlight {
+                        let bin_x = x / bin_size;
+                        let bin_y = top_y / bin_size;
+                        let entry = grid_bins.entry((bin_x, bin_y)).or_insert((0.0, 0.0, 0));
+                        entry.0 += x as f64;
+                        entry.1 += top_y as f64;
+                        entry.2 += 1;
+                    }
+                }
+            }
+        }
+
+        let mut raw_centroids = Vec::new();
+        for ((_bx, _by), (sum_x, sum_y, count)) in grid_bins {
+            if count >= 8 {
+                let cx = sum_x / count as f64;
+                let cy = sum_y / count as f64;
+
+                // Projection exacte vers les coordonnées écran de la fenêtre Dofus
+                let screen_x = origin_x + ((cx / scan_w as f64) * client_w as f64) as i32;
+                let screen_y = origin_y + ((cy / scan_h as f64) * client_h as f64) as i32;
+
+                raw_centroids.push((screen_x, screen_y));
+            }
+        }
+
+        // Fusion des clusters voisins (< 45 pixels écran)
+        let mut merged_centroids: Vec<(i32, i32, String, String)> = Vec::new();
+        for (sx, sy) in raw_centroids {
+            let mut is_dup = false;
+            for (ex, ey, _, _) in &mut merged_centroids {
+                let dx = (sx - *ex) as f64;
+                let dy = (sy - *ey) as f64;
+                if (dx * dx + dy * dy).sqrt() < 45.0 {
+                    *ex = (*ex + sx) / 2;
+                    *ey = (*ey + sy) / 2;
+                    is_dup = true;
+                    break;
+                }
+            }
+            if !is_dup {
+                let cat = if sy > origin_y + (client_h as f64 * 0.70) as i32 {
+                    ("transition".to_string(), "Plot de Transition / Sortie ☀️".to_string())
+                } else {
+                    ("minerai".to_string(), "Gisement de Minerai / Ressource".to_string())
+                };
+                merged_centroids.push((sx, sy, cat.0, cat.1));
+            }
+        }
+
+        // Tri spatial par ordre de lecture / proximité
+        merged_centroids.sort_by_key(|(x, y, _, _)| (*y, *x));
+
+        merged_centroids
+    }
+
+    /// Capture une nouvelle image sous le curseur et analyse l'état de la ressource (Minable, Épuisé, Non-minable)
+    pub fn capture_and_inspect_cursor_tooltip(
+        target_hwnd: isize,
+        mouse_x: i32,
+        mouse_y: i32,
+        default_obj: &str,
+        default_cat: &str
+    ) -> (String, String, String, String) {
+        #[cfg(target_os = "windows")]
+        unsafe {
+            if target_hwnd == 0 || IsWindowVisible(target_hwnd) == 0 || IsIconic(target_hwnd) != 0 {
+                let state = if default_cat == "transition" { "transition" } else { "minable" };
+                return (default_obj.to_string(), default_cat.to_string(), state.to_string(), format!("Filon de {}", default_obj));
+            }
+
+            let hdc_desktop = GetDC(0);
+            if hdc_desktop == 0 {
+                let state = if default_cat == "transition" { "transition" } else { "minable" };
+                return (default_obj.to_string(), default_cat.to_string(), state.to_string(), format!("Filon de {}", default_obj));
+            }
+
+            let sample_w = 160i32;
+            let sample_h = 70i32;
+            // Zone d'infobulle (légèrement au-dessus et à droite du curseur)
+            let sample_x = mouse_x - 40;
+            let sample_y = mouse_y - 65;
+
+            let hdc_mem = CreateCompatibleDC(hdc_desktop);
+            let hbmp = CreateCompatibleBitmap(hdc_desktop, sample_w, sample_h);
+            let old_bmp = SelectObject(hdc_mem, hbmp);
+
+            SetStretchBltMode(hdc_mem, HALFTONE);
+            SetBrushOrgEx(hdc_mem, 0, 0, std::ptr::null_mut());
+
+            StretchBlt(
+                hdc_mem,
+                0,
+                0,
+                sample_w,
+                sample_h,
+                hdc_desktop,
+                sample_x,
+                sample_y,
+                sample_w,
+                sample_h,
+                SRCCOPY,
+            );
+
+            let mut bmi = BITMAPINFO {
+                bmi_header: BITMAPINFOHEADER {
+                    bi_size: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                    bi_width: sample_w,
+                    bi_height: sample_h,
+                    bi_planes: 1,
+                    bi_bit_count: 24,
+                    bi_compression: BI_RGB,
+                    bi_size_image: 0,
+                    bi_x_pels_per_meter: 0,
+                    bi_y_pels_per_meter: 0,
+                    bi_clr_used: 0,
+                    bi_clr_important: 0,
+                },
+                bmi_colors: [0],
+            };
+
+            let row_size = ((sample_w * 3 + 3) & !3) as usize;
+            let mut raw_bytes = vec![0u8; row_size * sample_h as usize];
+
+            GetDIBits(
+                hdc_mem,
+                hbmp,
+                0,
+                sample_h as u32,
+                raw_bytes.as_mut_ptr(),
+                &mut bmi,
+                DIB_RGB_COLORS,
+            );
+
+            SelectObject(hdc_mem, old_bmp);
+            DeleteObject(hbmp);
+            DeleteDC(hdc_mem);
+            ReleaseDC(0, hdc_desktop);
+
+            // Analyse optique des pixels du tooltip (fond sombre + texte lumineux)
+            let mut _dark_bg_pixels = 0;
+            let mut text_white_pixels = 0;
+            let mut warning_red_pixels = 0;
+            let mut gray_depleted_pixels = 0;
+
+            for y in 0..sample_h {
+                let row_offset = (sample_h - 1 - y) as usize * row_size;
+                for x in 0..sample_w {
+                    let offset = row_offset + (x as usize * 3);
+                    if offset + 2 < raw_bytes.len() {
+                        let b = raw_bytes[offset] as u32;
+                        let g = raw_bytes[offset + 1] as u32;
+                        let r = raw_bytes[offset + 2] as u32;
+                        let lum = (r * 299 + g * 587 + b * 114) / 1000;
+
+                        if lum < 35 {
+                            _dark_bg_pixels += 1;
+                        } else if lum > 190 {
+                            text_white_pixels += 1;
+                        } else if r > 160 && g < 80 && b < 80 {
+                            warning_red_pixels += 1;
+                        } else if lum > 80 && lum < 140 && (r as i32 - g as i32).abs() < 15 {
+                            gray_depleted_pixels += 1;
+                        }
+                    }
+                }
+            }
+
+            // Déduction de l'état réel par analyse optique
+            let (state, label) = if default_cat == "transition" {
+                ("transition".to_string(), "Plot de Transition ☀️ (Changement de Carte)".to_string())
+            } else if warning_red_pixels > 35 {
+                ("non_minable".to_string(), format!("Filon de {} (Niveau insuffisant)", default_obj))
+            } else if gray_depleted_pixels > 120 && text_white_pixels < 40 {
+                ("epuise".to_string(), format!("Filon de {} (Épuisé / Repousse)", default_obj))
+            } else {
+                ("minable".to_string(), format!("Filon de {} (Prêt à être récolté)", default_obj))
+            };
+
+            (default_obj.to_string(), default_cat.to_string(), state, label)
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = (target_hwnd, mouse_x, mouse_y);
+            (default_obj.to_string(), default_cat.to_string(), "minable".to_string(), format!("Filon de {}", default_obj))
         }
     }
 

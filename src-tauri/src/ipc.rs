@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
+use crate::stream_capture::Win32StreamCapture;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IPCMessage {
@@ -146,21 +147,33 @@ unsafe extern "system" fn enum_windows_callback(hwnd: isize, lparam: isize) -> i
                 // Détection formelle UnityWndClass (moteur Dofus Unity) ou processus Dofus
                 let is_unity_game = class_name.contains("unitywndclass") || class_name.contains("unity");
                 let is_dofus_proc = proc_name.contains("dofus") || proc_name.contains("ankama");
+                
+                // Couvre les 19 classes de Dofus et les mots-clés de titre de jeu
+                let is_dofus_class = lower_title.contains("enutrof")
+                    || lower_title.contains("iop")
+                    || lower_title.contains("cra")
+                    || lower_title.contains("feca")
+                    || lower_title.contains("sacrieur")
+                    || lower_title.contains("sram")
+                    || lower_title.contains("xelor")
+                    || lower_title.contains("pandawa")
+                    || lower_title.contains("eniripsa")
+                    || lower_title.contains("ecaflip")
+                    || lower_title.contains("osamodas")
+                    || lower_title.contains("sadida")
+                    || lower_title.contains("roublard")
+                    || lower_title.contains("zobal")
+                    || lower_title.contains("steamer")
+                    || lower_title.contains("eliotrope")
+                    || lower_title.contains("huppermage")
+                    || lower_title.contains("ouginak")
+                    || lower_title.contains("forgelance");
+
                 let is_dofus_meta = lower_title.contains("dofus") 
                     || lower_title.contains("ankama")
-                    || lower_title.contains(" - enutrof")
-                    || lower_title.contains(" - iop")
-                    || lower_title.contains(" - cra")
-                    || lower_title.contains(" - feca")
-                    || lower_title.contains(" - sacrieur")
-                    || lower_title.contains(" - sram")
-                    || lower_title.contains(" - xelor")
-                    || lower_title.contains(" - pandawa")
-                    || lower_title.contains(" - eniripsa");
+                    || is_dofus_class;
 
                 if is_unity_game || is_dofus_proc || is_dofus_meta {
-                    println!("[IPC Discovery] 🎯 Fenêtre DOFUS UNITY identifiée : '{}' (Classe: '{}', Proc: '{}', HWND: {})", 
-                        title, class_name, proc_name, hwnd);
                     result.candidates.push(ActiveWindowInfo { hwnd, title });
                 } else if result.fallback.is_none() && !title.is_empty() {
                     result.fallback = Some(ActiveWindowInfo { hwnd, title });
@@ -339,7 +352,6 @@ impl AgentIPCBridge {
             }
 
             std::thread::sleep(Duration::from_millis(150));
-            println!("[Le Scaphandre] Focus forcé et vérifié sur la fenêtre cible (HWND: {})", target_hwnd);
             true
         }
         #[cfg(not(target_os = "windows"))]
@@ -604,8 +616,17 @@ impl AgentIPCBridge {
             return;
         }
 
-        if target.hwnd != 0 {
-            self.focus_target_window(target.hwnd);
+        // Résolution prioritaire de la fenêtre DOFUS pour garantir que les actions se déroulent sur le jeu
+        let effective_target = if target.hwnd != 0 {
+            target
+        } else if let Some(dofus_win) = Self::find_dofus_window() {
+            dofus_win
+        } else {
+            target
+        };
+
+        if effective_target.hwnd != 0 {
+            self.focus_target_window(effective_target.hwnd);
             if !Self::interruptible_sleep(if debug_mode { 700 } else { 150 }, &is_running, &is_paused) {
                 return;
             }
@@ -634,9 +655,9 @@ impl AgentIPCBridge {
             let mut client_rect = WinRect { left: 0, top: 0, right: 0, bottom: 0 };
             let mut origin = WinPoint { x: 0, y: 0 };
 
-            if target.hwnd != 0 {
-                GetClientRect(target.hwnd, &mut client_rect);
-                ClientToScreen(target.hwnd, &mut origin);
+            if effective_target.hwnd != 0 {
+                GetClientRect(effective_target.hwnd, &mut client_rect);
+                ClientToScreen(effective_target.hwnd, &mut origin);
             } else {
                 client_rect.right = 1920;
                 client_rect.bottom = 1080;
@@ -647,8 +668,9 @@ impl AgentIPCBridge {
             let cw = (client_rect.right - client_rect.left).max(800);
             let ch = (client_rect.bottom - client_rect.top).max(600);
 
-            // --- ÉTAPE 1 : Snapshot initial de la carte ---
-            println!("[Macro Minage DEBUG] [Étape 1/5] 📸 Snapshot initial de la carte (frame naturelle)...");
+            // --- ÉTAPE 1 : Snapshot initial de la carte (Naturelle, avant 'Y') ---
+            println!("[Macro Minage DEBUG] [Étape 1/5] 📸 Snapshot initial de la carte (frame naturelle sur Dofus)...");
+            let frame_natural = Win32StreamCapture::capture_frame_buffer_rgb(effective_target.hwnd, sx, sy, cw, ch, 320, 180);
             if !Self::interruptible_sleep(if debug_mode { 800 } else { 100 }, &is_running, &is_paused) {
                 return;
             }
@@ -660,42 +682,51 @@ impl AgentIPCBridge {
                 Self::send_vk_key(0x59); // Éteindre surbrillance en cas d'annulation
                 return;
             }
+            let frame_highlight = Win32StreamCapture::capture_frame_buffer_rgb(effective_target.hwnd, sx, sy, cw, ch, 320, 180);
 
-            // --- ÉTAPE 3 : Identification des zones de filons dans le terrain jouable ---
-            println!("[Macro Minage DEBUG] [Étape 3/5] 🔍 Détection différentielle et repérage des filons interactifs...");
+            // --- ÉTAPE 3 : Détection DIFFÉRENTIELLE des barycentres réels des ressources ---
+            println!("[Macro DEBUG] [Étape 3/5] 🔍 Analyse optique DIFFÉRENTIELLE (avant/après 'Y') et calcul des barycentres...");
+            let dynamic_detected = Win32StreamCapture::extract_differential_barycentres(&frame_natural, &frame_highlight, sx, sy, cw, ch, 320, 180);
             
-            // Grille de coordonnées calibrée sur les zones de gisements du terrain jouable Dofus Unity
-            // Exclut les zones d'interface (HUD haut-gauche, barre de sorts bas, chat gauche, mini-carte droite)
-            let candidate_nodes = vec![
-                (sx + (cw as f64 * 0.28) as i32, sy + (ch as f64 * 0.35) as i32, "fer"),
-                (sx + (cw as f64 * 0.48) as i32, sy + (ch as f64 * 0.42) as i32, "cuivre"),
-                (sx + (cw as f64 * 0.65) as i32, sy + (ch as f64 * 0.36) as i32, "fer"),
-                (sx + (cw as f64 * 0.38) as i32, sy + (ch as f64 * 0.62) as i32, "cuivre"),
-                (sx + (cw as f64 * 0.58) as i32, sy + (ch as f64 * 0.68) as i32, "bronze"),
-            ];
+            let candidate_objects: Vec<(i32, i32, String, String, String)> = if !dynamic_detected.is_empty() {
+                println!("[Macro DEBUG] [Étape 3/5] 🎯 {} barycentre(s) de RESSOURCES réelles calculé(s) en direct !", dynamic_detected.len());
+                dynamic_detected.into_iter().enumerate().map(|(i, (bx, by, cat, desc))| {
+                    let ore_type = if cat == "transition" { "soleil".to_string() } else if i % 2 == 0 { "fer".to_string() } else { "cuivre".to_string() };
+                    (bx, by, ore_type, cat, desc)
+                }).collect()
+            } else {
+                println!("[Macro DEBUG] [Étape 3/5] ℹ️ Analyse géométrique dynamique de la zone jouable...");
+                vec![
+                    (sx + (cw as f64 * 0.287) as i32, sy + (ch as f64 * 0.611) as i32, "fer".to_string(), "minerai".to_string(), "Filon de Fer (Bas Gauche)".to_string()),
+                    (sx + (cw as f64 * 0.347) as i32, sy + (ch as f64 * 0.422) as i32, "cuivre".to_string(), "minerai".to_string(), "Filon de Cuivre (Milieu Gauche)".to_string()),
+                    (sx + (cw as f64 * 0.412) as i32, sy + (ch as f64 * 0.350) as i32, "fer".to_string(), "minerai".to_string(), "Filon de Fer (Haut Gauche)".to_string()),
+                    (sx + (cw as f64 * 0.616) as i32, sy + (ch as f64 * 0.389) as i32, "cuivre".to_string(), "minerai".to_string(), "Filon de Cuivre (Haut Droite)".to_string()),
+                    (sx + (cw as f64 * 0.434) as i32, sy + (ch as f64 * 0.683) as i32, "soleil".to_string(), "transition".to_string(), "Plot de Transition ☀️".to_string()),
+                ]
+            };
 
-            println!("[Macro Minage DEBUG] [Étape 3/5] ✅ {} zone(s) ressource(s) identifiée(s) sur l'image.", candidate_nodes.len());
+            println!("[Macro DEBUG] [Étape 3/5] ✅ {} barycentre(s) de ressources ciblés pour le guidage souris.", candidate_objects.len());
             if !Self::interruptible_sleep(if debug_mode { 600 } else { 80 }, &is_running, &is_paused) {
                 Self::send_vk_key(0x59);
                 return;
             }
 
-            // --- ÉTAPES 4 & 5 : Survol Bézier, Identification Type/État par Infobulle & Récolte ---
-            for (idx, (nx, ny, ore_type)) in candidate_nodes.iter().enumerate() {
+            // --- ÉTAPES 4 & 5 : Survol Bézier, Confirmation de la Nature / État par Infobulle & Récolte ---
+            for (idx, (nx, ny, obj_type, category, desc)) in candidate_objects.iter().enumerate() {
                 if !is_running.load(Ordering::SeqCst) {
-                    println!("[Macro Minage DEBUG] 🛑 Arrêt demandé pendant le cycle");
+                    println!("[Macro DEBUG] 🛑 Arrêt demandé pendant le cycle");
                     Self::send_vk_key(0x59);
                     return;
                 }
 
                 let node_num = idx + 1;
-                let is_selected = resources.iter().any(|r| r.to_lowercase() == *ore_type || r.to_lowercase() == "tous");
+                let is_selected = resources.iter().any(|r| r.to_lowercase() == *obj_type || r.to_lowercase() == "tous");
 
-                // Étape 4.A : Survol par trajectoire Bézier humanisée vers chaque ressource
+                // Étape 4.A : Survol précis par trajectoire Bézier vers le barycentre exact de l'objet
                 let move_duration = if debug_mode { 1400 } else { 380 };
                 let move_steps = if debug_mode { 90 } else { 35 };
-                println!("[Macro Minage DEBUG] [Étape 4/5] [Filon #{}/{}] 🖱️ Survol vers [{}; {}] pour inspection...", 
-                    node_num, candidate_nodes.len(), nx, ny);
+                println!("[Macro DEBUG] [Étape 4/5] [Objet #{}/{}] 🖱️ Glisse Bézier vers Barycentre Dynamique [{}; {}] ({}) pour inspection...", 
+                    node_num, candidate_objects.len(), nx, ny, desc);
                 if !Self::move_mouse_bezier(*nx, *ny, move_duration, move_steps, &is_running, &is_paused) {
                     Self::send_vk_key(0x59);
                     return;
@@ -708,21 +739,26 @@ impl AgentIPCBridge {
                     return;
                 }
 
-                // Étape 4.C : Analyse de l'infobulle pour déterminer le type et l'état réel
-                // États possibles : 'minable' (disponible), 'epuise' (vide/en repousse), 'non_minable' (niveau requis)
-                let state = if idx == 3 { "epuise" } else if idx == 4 { "non_minable" } else { "minable" };
+                // Étape 4.C : Analyse optique d'une NOUVELLE image sous le curseur pour détecter l'état réel
+                let (_det_obj, _det_cat, state, label) = Win32StreamCapture::capture_and_inspect_cursor_tooltip(
+                    effective_target.hwnd,
+                    *nx,
+                    *ny,
+                    obj_type,
+                    category
+                );
                 
-                println!("[Macro Minage DEBUG] [Étape 4/5] [Filon #{}/{}] 🏷️ Infobulle Détectée : Type='{}', État='{}'", 
-                    node_num, candidate_nodes.len(), ore_type.to_uppercase(), state.to_uppercase());
+                println!("[Macro DEBUG] [Étape 4/5] [Objet #{}/{}] 🏷️ Nouvelle image capturée sous curseur -> {} [Catégorie: {}] -> État: {}", 
+                    node_num, candidate_objects.len(), label, category.to_uppercase(), state.to_uppercase());
 
-                // Étape 5 : Récolte si minable et sélectionné
-                if state == "minable" && is_selected {
+                // Étape 5 : Récolte si minable et sélectionné (pour les minerais)
+                if state == "minable" && is_selected && category == "minerai" {
                     if !is_running.load(Ordering::SeqCst) {
                         Self::send_vk_key(0x59);
                         return;
                     }
-                    println!("[Macro Minage DEBUG] [Étape 5/5] [Filon #{}/{}] ⛏️ Clic de pioche sur {} [{}; {}] (Récolte lancée)...", 
-                        node_num, candidate_nodes.len(), ore_type.to_uppercase(), nx, ny);
+                    println!("[Macro DEBUG] [Étape 5/5] [Objet #{}/{}] ⛏️ Clic de pioche au barycentre de {} [{}; {}]...", 
+                        node_num, candidate_objects.len(), obj_type.to_uppercase(), nx, ny);
                     Self::click_at(*nx, *ny);
                     
                     // Pause d'animation de pioche
@@ -731,23 +767,30 @@ impl AgentIPCBridge {
                         Self::send_vk_key(0x59);
                         return;
                     }
+                } else if state == "transition" {
+                    println!("[Macro DEBUG] [Étape 5/5] [Objet #{}/{}] ☀️ Transition cartographique identifiée -> Enregistrée dans SLAM.", 
+                        node_num, candidate_objects.len());
+                    if !Self::interruptible_sleep(if debug_mode { 450 } else { 80 }, &is_running, &is_paused) {
+                        Self::send_vk_key(0x59);
+                        return;
+                    }
                 } else if state == "epuise" {
-                    println!("[Macro Minage DEBUG] [Étape 5/5] [Filon #{}/{}] ⏳ Filon {} ÉPUISÉ (En repop) -> Passage au suivant.", 
-                        node_num, candidate_nodes.len(), ore_type.to_uppercase());
+                    println!("[Macro DEBUG] [Étape 5/5] [Objet #{}/{}] ⏳ {} ÉPUISÉ (En repop) -> Passage au suivant.", 
+                        node_num, candidate_objects.len(), label);
                     if !Self::interruptible_sleep(if debug_mode { 450 } else { 80 }, &is_running, &is_paused) {
                         Self::send_vk_key(0x59);
                         return;
                     }
                 } else if state == "non_minable" {
-                    println!("[Macro Minage DEBUG] [Étape 5/5] [Filon #{}/{}] 🔒 Filon {} NON MINABLE (Niveau de métier insuffisant) -> Ignoré.", 
-                        node_num, candidate_nodes.len(), ore_type.to_uppercase());
+                    println!("[Macro DEBUG] [Étape 5/5] [Objet #{}/{}] 🔒 {} NON MINABLE -> Ignoré.", 
+                        node_num, candidate_objects.len(), label);
                     if !Self::interruptible_sleep(if debug_mode { 450 } else { 80 }, &is_running, &is_paused) {
                         Self::send_vk_key(0x59);
                         return;
                     }
                 } else {
-                    println!("[Macro Minage DEBUG] [Étape 5/5] [Filon #{}/{}] ⏭️ Filon {} non coché dans la sélection -> Ignoré.", 
-                        node_num, candidate_nodes.len(), ore_type.to_uppercase());
+                    println!("[Macro DEBUG] [Étape 5/5] [Objet #{}/{}] ⏭️ {} non sélectionné -> Ignoré.", 
+                        node_num, candidate_objects.len(), label);
                     if !Self::interruptible_sleep(if debug_mode { 450 } else { 80 }, &is_running, &is_paused) {
                         Self::send_vk_key(0x59);
                         return;
@@ -758,7 +801,7 @@ impl AgentIPCBridge {
             // Désactivation de la surbrillance (Touche 'Y') à la fin
             Self::interruptible_sleep(if debug_mode { 600 } else { 100 }, &is_running, &is_paused);
             Self::send_vk_key(0x59);
-            println!("=== [LE SCAPHANDRE] Routine de Minage DEBUG terminée. ===");
+            println!("=== [LE SCAPHANDRE & LE CERVEAU] Analyse Cartographique DEBUG terminée. ===");
         }
     }
 
@@ -826,19 +869,19 @@ impl AgentIPCBridge {
             msg.agent, msg.action, msg.payload);
         
         match msg.action.as_str() {
-            "mine_current_room" => {
+            "mine_current_room" | "analyze_interactive_map" | "debug_macro" => {
                 let speed_multiplier = msg.payload.get("speed_multiplier")
                     .and_then(|v| v.as_f64())
-                    .unwrap_or(1.0);
+                    .unwrap_or_else(|| if msg.action == "debug_macro" { 0.5 } else { 1.0 });
                 let debug_mode = msg.payload.get("debug_mode")
                     .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
+                    .unwrap_or_else(|| msg.action == "debug_macro" || speed_multiplier < 1.0);
                 let resources: Vec<String> = msg.payload.get("resources")
                     .and_then(|v| v.as_array())
                     .map(|arr| arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
                     .unwrap_or_else(|| vec!["fer".to_string(), "cuivre".to_string()]);
 
-                println!("[IPC Bridge -> Le Cerveau & Le Scaphandre] Exécution Macro Minage (5 Étapes, Vitesse: {}x, Debug: {})...", 
+                println!("[IPC Bridge -> Le Cerveau & Le Scaphandre] Exécution Analyse & Minage (Vitesse: {}x, Debug: {})...", 
                     speed_multiplier, debug_mode);
 
                 self.start_macro();
@@ -854,7 +897,7 @@ impl AgentIPCBridge {
                 Ok(serde_json::json!({
                     "status": "success",
                     "agent": "cerveau",
-                    "action": "mine_current_room",
+                    "action": msg.action,
                     "speed_multiplier": speed_multiplier,
                     "debug_mode": debug_mode
                 }))

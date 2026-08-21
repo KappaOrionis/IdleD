@@ -134,6 +134,25 @@ fn get_stream_thumbnail(state: State<'_, Mutex<AppState>>) -> Result<CaptureThum
     let (data_url_opt, detected_map) = Win32StreamCapture::capture_and_analyze(target.hwnd, &target.title, 260, 68);
     let data_url = data_url_opt.unwrap_or_default();
     
+    let previous_map = app.fsm.get_map_info();
+    let is_map_changed = detected_map.is_detected && (
+        previous_map.pos_x != detected_map.pos_x ||
+        previous_map.pos_y != detected_map.pos_y ||
+        previous_map.zone_name != detected_map.zone_name
+    );
+
+    if is_map_changed {
+        println!(
+            "[Perception Carte] 🗺️ Carte Détectée : '{}' [{}, {}] | Niveau: {} | Bonus: {} | Plots Sortie: {}",
+            detected_map.zone_name,
+            detected_map.pos_x.unwrap_or(0),
+            detected_map.pos_y.unwrap_or(0),
+            detected_map.area_level.unwrap_or(0),
+            detected_map.zone_bonus.as_deref().unwrap_or("--"),
+            detected_map.sun_nodes_count
+        );
+    }
+
     // Mise à jour continue de l'état cartographique de l'application
     app.fsm.update_map_info(detected_map);
 
