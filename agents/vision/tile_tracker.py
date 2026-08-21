@@ -60,10 +60,7 @@ class TileTrackerLoop:
                 frame = self.screen_capture.capture_frame()
                 objects_summary = self.object_registry.analyze_all_objects(frame)
                 
-                latest_data = self.map_reader.parse_hud_text(
-                    "Amakna (Souterrains)",
-                    "4, 28 - Niveau 1"
-                )
+                latest_data = self.map_reader.extract_from_frame(frame)
                 sun_info = objects_summary.get("sun_node", {})
                 latest_data["sun_nodes_count"] = sun_info.get("count", 0)
                 latest_data["detected_objects"] = objects_summary

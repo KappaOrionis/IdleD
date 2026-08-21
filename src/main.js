@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const mapZoneName = document.getElementById('map-zone-name');
     const mapCoords = document.getElementById('map-coords');
     const mapLevel = document.getElementById('map-level');
+    const mapBonus = document.getElementById('map-bonus');
     const sunNodesBadge = document.getElementById('sun-nodes-badge');
 
     // Modale de Configuration
@@ -150,11 +151,22 @@ document.addEventListener('DOMContentLoaded', () => {
             autoEnter: true
         },
         {
+            id: 'btn-debug',
+            icon: '🔬',
+            label: 'DEBUG',
+            sub: 'Minage /2',
+            shortcut: 'F4',
+            type: 'mining_debug',
+            harvestResources: ['fer', 'cuivre'],
+            value: 'fer,cuivre',
+            autoEnter: true
+        },
+        {
             id: 'btn-travel',
             icon: '🚀',
             label: 'TRAVEL TO',
             sub: '/travel 4,28',
-            shortcut: 'F4',
+            shortcut: 'F5',
             type: 'travel',
             value: '4,28',
             autoEnter: true
@@ -222,11 +234,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function updateHarvestFormVisibility(selectedType) {
-        if (selectedType === 'harvest' || selectedType === 'mining_room') {
+        if (selectedType === 'harvest' || selectedType === 'mining_room' || selectedType === 'mining_debug') {
             if (groupHarvestConfig) groupHarvestConfig.style.display = 'block';
             if (groupActionValue) groupActionValue.style.display = 'none';
 
-            // Pour mining_room (carte actuelle), on masque la saisie manuelle de coordonnées
+            // Pour mining_room et mining_debug, on masque la saisie manuelle de coordonnées
             const coordsGroup = editHarvestCoords?.closest('.form-group');
             if (coordsGroup) {
                 coordsGroup.style.display = (selectedType === 'harvest') ? 'block' : 'none';
@@ -267,7 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (editBtnAutoEnter) editBtnAutoEnter.checked = (btnData.autoEnter !== false);
 
         if (editHarvestCoords) editHarvestCoords.value = btnData.harvestCoords || btnData.value || '4,28';
-        const defaultTarget = (type === 'mining_room') ? ['fer'] : ['cuivre', 'fer'];
+        const defaultTarget = (type === 'mining_room' || type === 'mining_debug') ? ['fer', 'cuivre'] : ['cuivre', 'fer'];
         const targetResources = (btnData.harvestResources && btnData.harvestResources.length > 0)
             ? btnData.harvestResources
             : defaultTarget;
@@ -363,21 +375,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 payload: { x, y }
             });
             console.log(`[StreamDeck IPC -> Le Scaphandre] Travel: ${travelCmd}`);
-        } else if (type === 'mining_room') {
+        } else if (type === 'mining_room' || type === 'mining_debug') {
+            const isDebug = (type === 'mining_debug');
+            const speedMultiplier = isDebug ? 0.5 : 1.0;
             const resources = (btnData.harvestResources && btnData.harvestResources.length > 0)
                 ? btnData.harvestResources
                 : ['fer'];
             const resText = resources.join(', ');
-            if (activeScriptLabel) activeScriptLabel.innerText = `⛏️ Minage Carte: [${resText}]`;
+            const labelPrefix = isDebug ? '🔬 DEBUG Minage /2' : '⛏️ Minage Carte';
+            if (activeScriptLabel) activeScriptLabel.innerText = `${labelPrefix}: [${resText}]`;
 
+            await invokeTauri('set_supervisor_state', { newState: 'Harvesting' });
             await invokeTauri('send_ipc_message', {
                 agent: 'cerveau',
                 action: 'mine_current_room',
                 payload: {
-                    resources: resources
+                    resources: resources,
+                    speed_multiplier: speedMultiplier,
+                    debug_mode: isDebug
                 }
             });
-            console.log(`[StreamDeck IPC -> Le Cerveau] Macro Minage Carte Actuelle démarrée pour minerais:`, resources);
+            console.log(`[StreamDeck IPC -> Le Cerveau] Macro ${labelPrefix} démarrée pour minerais:`, resources);
         } else if (type === 'harvest') {
             const harvestCoords = btnData.harvestCoords || val || '4,28';
             const coords = harvestCoords.split(',').map(s => parseInt(s.trim(), 10));
@@ -674,6 +692,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (mapCoords) mapCoords.innerText = `[${mapInfo.pos_x}, ${mapInfo.pos_y}]`;
                 if (mapZoneName) mapZoneName.innerText = mapInfo.zone_name || '--';
                 if (mapLevel) mapLevel.innerText = mapInfo.area_level ? `Niv. ${mapInfo.area_level}` : '--';
+                if (mapBonus) mapBonus.innerText = mapInfo.zone_bonus || '--';
                 if (sunNodesBadge) {
                     const count = mapInfo.sun_nodes_count || 0;
                     sunNodesBadge.innerText = count === 1 ? '1 plot' : `${count} plots`;
@@ -682,6 +701,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (mapCoords) mapCoords.innerText = '--';
                 if (mapZoneName) mapZoneName.innerText = '--';
                 if (mapLevel) mapLevel.innerText = '--';
+                if (mapBonus) mapBonus.innerText = '--';
                 if (sunNodesBadge) sunNodesBadge.innerText = '--';
             }
         } catch (err) {

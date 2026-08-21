@@ -211,8 +211,8 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100px;
-  font-size: 0.72rem;
+  max-width: 180px;
+  font-size: 0.74rem;
 }
 
 .tile-coords.highlight {
@@ -228,10 +228,17 @@ body {
 }
 
 .tile-level {
-  color: var(--text-muted);
-  font-size: 0.68rem;
+  color: var(--accent-turquoise, #2a9d8f);
+  font-weight: 600;
+  font-size: 0.74rem;
   white-space: nowrap;
-  flex-shrink: 0;
+}
+
+.tile-bonus {
+  color: #52b788;
+  font-weight: 700;
+  font-size: 0.74rem;
+  white-space: nowrap;
 }
 
 .sun-nodes-badge {

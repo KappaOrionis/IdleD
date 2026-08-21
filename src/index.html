@@ -22,22 +22,53 @@
                 <img id="stream-thumbnail-img" class="stream-thumbnail-img" alt="Capture Flux" src="" />
             </div>
 
-            <!-- 3. Informations de la Tuile en Colonne (Position, Nb Plot, Synthèse) avant les boutons de macro -->
+            <!-- 3. Informations de la Tuile en Colonne (Position, Zone, Niveau, Nb Plot, Synthèse) avant les boutons de macro -->
             <div class="tile-info-column" id="tile-info-badge">
                 <!-- Ligne 1 : Position & Coordonnées -->
-                <div class="info-row info-position" title="Zone et coordonnées de la carte">
+                <div class="info-row info-position" title="Coordonnées de la carte">
                     <div class="info-label-group">
                         <span class="info-icon">📍</span>
                         <span class="info-label">Position :</span>
                     </div>
                     <div class="info-value-group">
                         <span class="tile-coords highlight" id="map-coords">--</span>
+                    </div>
+                </div>
+
+                <!-- Ligne 2 : Nom de la Zone -->
+                <div class="info-row info-zone" title="Nom de la zone ou sous-zone">
+                    <div class="info-label-group">
+                        <span class="info-icon">🏛️</span>
+                        <span class="info-label">Zone :</span>
+                    </div>
+                    <div class="info-value-group">
                         <span class="tile-zone" id="map-zone-name">--</span>
+                    </div>
+                </div>
+
+                <!-- Ligne 3 : Niveau de la Zone -->
+                <div class="info-row info-level" title="Niveau de la zone">
+                    <div class="info-label-group">
+                        <span class="info-icon">⭐</span>
+                        <span class="info-label">Niveau :</span>
+                    </div>
+                    <div class="info-value-group">
                         <span class="tile-level" id="map-level">--</span>
                     </div>
                 </div>
 
-                <!-- Ligne 2 : Nombre de Plots / Changements de carte -->
+                <!-- Ligne 4 : Bonus de Zone (si disponible) -->
+                <div class="info-row info-bonus" id="row-zone-bonus" title="Bonus de zone (Expérience & Butin)">
+                    <div class="info-label-group">
+                        <span class="info-icon">📊</span>
+                        <span class="info-label">Bonus :</span>
+                    </div>
+                    <div class="info-value-group">
+                        <span class="tile-bonus" id="map-bonus">--</span>
+                    </div>
+                </div>
+
+                <!-- Ligne 5 : Nombre de Plots / Changements de carte -->
                 <div class="info-row info-plots" title="Plots de changement de carte détectés">
                     <div class="info-label-group">
                         <span class="info-icon">☀️</span>
@@ -48,7 +79,7 @@
                     </div>
                 </div>
 
-                <!-- Ligne 3 : Synthèse de la Carte & SLAM -->
+                <!-- Ligne 6 : Synthèse de la Carte & SLAM -->
                 <div class="info-row info-synthesis interactive-row" id="btn-open-map-synth" title="Cliquez pour afficher la Synthèse Complète de la Carte">
                     <div class="info-label-group">
                         <span class="info-icon">🗺️</span>
@@ -133,6 +164,7 @@
                         <label for="edit-btn-type">Type d'Action :</label>
                         <select id="edit-btn-type">
                             <option value="mining_room">⛏️ Macro Minage (Carte Actuelle)</option>
+                            <option value="mining_debug">🔬 Macro Minage DEBUG (Vitesse /2)</option>
                             <option value="harvest">🌾 Récolte & Surveillance (/travel)</option>
                             <option value="chat">💬 Envoi de message Chat</option>
                             <option value="travel">🚀 Commande /travel (Déplacement)</option>

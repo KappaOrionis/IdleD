@@ -71,22 +71,84 @@ def test_execute_room_mining_mines_only_selected_available():
     assert len(clicks) == 1
     assert len(moves) == 3
 
-def test_execute_room_mining_multi_ores():
-    routine = RoomMinerRoutine()
+def test_execute_room_mining_three_tooltip_states():
+    routine = RoomMinerRoutine(default_selected_ores=["fer", "cuivre", "argent"])
     nodes = [
         {"x": 100, "y": 100, "ore_type": "fer"},
-        {"x": 200, "y": 200, "ore_type": "bronze"}
+        {"x": 200, "y": 200, "ore_type": "cuivre"},
+        {"x": 300, "y": 300, "ore_type": "argent"}
     ]
     
+    # 1. Fer : épuisé (filon vide)
+    # 2. Cuivre : non minable (niveau mineur insuffisant)
+    # 3. Argent : minable
+    tooltip_feed = [
+        {"resource_name": "Fer", "status": "epuise"},
+        {"resource_name": "Cuivre", "status": "available", "required_level": 50, "player_level": 10},
+        {"resource_name": "Argent", "status": "available", "required_level": 20, "player_level": 80}
+    ]
+    feed_idx = [0]
+    def next_tooltip():
+        val = tooltip_feed[feed_idx[0]]
+        feed_idx[0] += 1
+        return val
+
     clicks = []
     result = routine.execute_room_mining(
         detected_nodes=nodes,
-        selected_ores=["fer", "bronze"],
+        selected_ores=["fer", "cuivre", "argent"],
         move_cursor_fn=lambda x, y: None,
-        read_tooltip_fn=lambda: {"resource_name": "Bronze", "status": "available"},
-        click_fn=lambda: clicks.append(1),
-        sleep_fn=lambda t: None
+        read_tooltip_fn=next_tooltip,
+        click_fn=lambda: clicks.append(True),
+        sleep_fn=lambda t: None,
+        speed_multiplier=0.5
     )
+
+    assert result["success"] is True
+    assert result["speed_multiplier"] == 0.5
+    assert result["inspected_count"] == 3
+    assert result["mined_count"] == 1 # Seul l'argent est miné
+    assert result["skipped_count"] == 2
+    assert result["skipped_nodes"][0]["state"] == "epuise"
+    assert result["skipped_nodes"][1]["state"] == "non_minable"
+    assert len(clicks) == 1
+
+def test_execute_full_mining_cycle_5_steps():
+    import numpy as np
+    routine = RoomMinerRoutine(default_selected_ores=["fer"])
     
-    assert result["mined_count"] == 2
-    assert len(clicks) == 2
+    steps_executed = []
+    
+    # Étape 1 : Snapshot initial
+    def fake_capture():
+        steps_executed.append("snapshot")
+        # Image dummy
+        img = np.zeros((600, 800, 3), dtype=np.uint8)
+        # Ajout d'une zone cuivrée / halo lumineux
+        img[250:280, 350:390] = [30, 150, 220]
+        return img
+        
+    # Étape 2 : Touche Y
+    def fake_press_key(key):
+        steps_executed.append(f"press_{key}")
+
+    moves = []
+    clicks = []
+    
+    result = routine.execute_full_mining_cycle(
+        capture_frame_fn=fake_capture,
+        press_key_fn=fake_press_key,
+        selected_ores=["copper_ore", "fer"],
+        move_cursor_fn=lambda x, y: moves.append((x, y)),
+        read_tooltip_fn=lambda: {"resource_name": "Cuivre", "status": "available"},
+        click_fn=lambda: clicks.append(True),
+        sleep_fn=lambda t: None,
+        speed_multiplier=0.5
+    )
+
+    assert result["success"] is True
+    assert "snapshot" in steps_executed
+    assert "press_y" in steps_executed
+    assert len(moves) >= 1
+    assert len(clicks) >= 1
+    assert result["speed_multiplier"] == 0.5

@@ -9,11 +9,26 @@ pub struct MapInfo {
     pub pos_x: Option<i32>,
     pub pos_y: Option<i32>,
     pub area_level: Option<u32>,
+    pub zone_bonus: Option<String>,
     pub sun_nodes_count: u32,
     pub error_message: Option<String>,
 }
 
 impl MapInfo {
+    pub fn none() -> Self {
+        Self {
+            is_detected: false,
+            zone_name: "--".to_string(),
+            pos_x: None,
+            pos_y: None,
+            area_level: None,
+            zone_bonus: None,
+            sun_nodes_count: 0,
+            error_message: Some("Aucune détection active".to_string()),
+        }
+    }
+
+    #[allow(dead_code)]
     pub fn detected(zone_name: &str, x: i32, y: i32, level: u32) -> Self {
         Self {
             is_detected: true,
@@ -21,6 +36,7 @@ impl MapInfo {
             pos_x: Some(x),
             pos_y: Some(y),
             area_level: Some(level),
+            zone_bonus: None,
             sun_nodes_count: 0,
             error_message: None,
         }
@@ -29,7 +45,7 @@ impl MapInfo {
 
 impl Default for MapInfo {
     fn default() -> Self {
-        Self::detected("Amakna (Souterrains)", 4, 28, 1)
+        Self::none()
     }
 }
 
@@ -101,11 +117,11 @@ mod tests {
     fn test_map_info_updates() {
         let fsm = StateMachine::new();
         let default_info = fsm.get_map_info();
-        assert!(default_info.is_detected);
-        assert_eq!(default_info.zone_name, "Amakna (Souterrains)");
-        assert_eq!(default_info.pos_x, Some(4));
-        assert_eq!(default_info.pos_y, Some(28));
-        assert_eq!(default_info.area_level, Some(1));
+        assert!(!default_info.is_detected);
+        assert_eq!(default_info.zone_name, "--");
+        assert_eq!(default_info.pos_x, None);
+        assert_eq!(default_info.pos_y, None);
+        assert_eq!(default_info.area_level, None);
 
         let new_info = MapInfo::detected("Forêt d'Astrub", -5, -18, 20);
         let updated = fsm.update_map_info(new_info.clone());
@@ -122,6 +138,7 @@ mod tests {
             pos_x: None,
             pos_y: None,
             area_level: None,
+            zone_bonus: None,
             sun_nodes_count: 0,
             error_message: Some("Fenêtre masquée".to_string()),
         };

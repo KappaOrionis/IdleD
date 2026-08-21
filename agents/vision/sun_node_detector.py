@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 from typing import List, Dict, Any, Optional
 from agents.vision.base_detector import BaseObjectDetector
+from agents.vision.screen_layout import GameScreenLayout
 
 class SunNodeDetector(BaseObjectDetector):
     """
@@ -10,8 +11,9 @@ class SunNodeDetector(BaseObjectDetector):
     Analyse l'image capturée (frame BGR) de la fenêtre de jeu Dofus Unity pour repérer les motifs 
     circulaires dorés/jaunes/verts de changement de carte au sol dans les souterrains et bâtiments.
     """
-    def __init__(self, confidence_threshold: float = 0.50):
+    def __init__(self, confidence_threshold: float = 0.50, layout: Optional[GameScreenLayout] = None):
         super().__init__(name="sun_node", confidence_threshold=confidence_threshold)
+        self.layout = layout or GameScreenLayout()
         
         # Plage HSV 1 : Jaune / Doré vif (motif central & pointes extérieures du soleil)
         self.lower_gold = np.array([15, 60, 60], dtype=np.uint8)
@@ -27,7 +29,7 @@ class SunNodeDetector(BaseObjectDetector):
     def detect_sun_nodes(self, frame: Optional[np.ndarray]) -> Dict[str, Any]:
         """
         Détecte tous les plots de changement de carte ("sun nodes") présents sur le terrain de jeu.
-        Exclut la zone HUD supérieure, le chat inférieur et la mini-carte pour éviter les faux positifs.
+        Exclut la zone HUD supérieure, le chat inférieur, les quêtes et la mini-carte pour éviter les faux positifs.
         """
         if frame is None or not isinstance(frame, np.ndarray) or frame.size == 0:
             return {"count": 0, "nodes": [], "found": False}
@@ -42,12 +44,8 @@ class SunNodeDetector(BaseObjectDetector):
         mask_green = cv2.inRange(hsv, self.lower_green, self.upper_green)
         mask = cv2.bitwise_or(mask_gold, mask_green)
 
-        # Exclusion des zones UI de Dofus Unity (Bandeau haut 5%, Chat bas-gauche 25x25%, Mini-carte bas-droite 30x25%)
-        # Évite les faux positifs sur les icônes d'interface ou la mini-carte
-        mask[0:int(h * 0.05), :] = 0  # En-tête HUD
-        mask[int(h * 0.75):, 0:int(w * 0.28)] = 0  # Panneau Chat
-        mask[int(h * 0.75):, int(w * 0.70):] = 0  # Mini-carte / Barres d'action droite
-        mask[int(h * 0.85):, :] = 0  # Barre d'expérience / Sorts centrale inférieure
+        # Application du masque centralisé de découpage du terrain jouable
+        mask = self.layout.apply_to_mask(mask)
 
         # Nettoyage morphologique
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))

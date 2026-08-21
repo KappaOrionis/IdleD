@@ -56,6 +56,7 @@ fn update_map_info(
     pos_x: Option<i32>,
     pos_y: Option<i32>,
     area_level: Option<u32>,
+    zone_bonus: Option<String>,
     sun_nodes_count: Option<u32>,
     error_message: Option<String>,
     state: State<'_, Mutex<AppState>>
@@ -67,6 +68,7 @@ fn update_map_info(
         pos_x,
         pos_y,
         area_level,
+        zone_bonus,
         sun_nodes_count: sun_nodes_count.unwrap_or(0),
         error_message,
     };
@@ -120,9 +122,12 @@ fn get_active_target_window(state: State<'_, Mutex<AppState>>) -> Result<ipc::Ac
 fn get_stream_thumbnail(state: State<'_, Mutex<AppState>>) -> Result<CaptureThumbnail, String> {
     let app = state.lock().unwrap();
     let target = app.ipc.get_active_target_window();
-    let data_url = Win32StreamCapture::capture_thumbnail_base64(target.hwnd, 260, 68)
-        .unwrap_or_default();
+    let (data_url_opt, detected_map) = Win32StreamCapture::capture_and_analyze(target.hwnd, &target.title, 260, 68);
+    let data_url = data_url_opt.unwrap_or_default();
     
+    // Mise à jour continue de l'état cartographique de l'application
+    app.fsm.update_map_info(detected_map);
+
     let is_valid = !data_url.is_empty();
     Ok(CaptureThumbnail {
         is_valid,

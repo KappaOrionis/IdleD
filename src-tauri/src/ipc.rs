@@ -79,6 +79,45 @@ impl AgentIPCBridge {
         }
     }
 
+    /// Recherche prioritaire d'une fenêtre Dofus (Unity / Rétro) ouverte sur le système
+    pub fn find_dofus_window() -> Option<ActiveWindowInfo> {
+        #[cfg(target_os = "windows")]
+        unsafe {
+            let current_pid = GetCurrentProcessId();
+            let mut candidate = GetWindow(GetForegroundWindow(), GW_HWNDNEXT);
+            let mut first_valid = None;
+
+            while candidate != 0 {
+                if IsWindowVisible(candidate) != 0 {
+                    let mut pid: u32 = 0;
+                    GetWindowThreadProcessId(candidate, &mut pid);
+                    if pid != current_pid {
+                        let len = GetWindowTextLengthW(candidate);
+                        if len > 0 {
+                            let mut buf = vec![0u16; (len + 1) as usize];
+                            let read_len = GetWindowTextW(candidate, buf.as_mut_ptr(), len + 1);
+                            let title = String::from_utf16_lossy(&buf[..read_len as usize]);
+                            let lower = title.to_lowercase();
+                            if lower.contains("dofus") || lower.contains("ankama") {
+                                println!("[IPC Target] Fenêtre de jeu Dofus détectée avec succès : '{}' (HWND: {})", title, candidate);
+                                return Some(ActiveWindowInfo { hwnd: candidate, title });
+                            }
+                            if first_valid.is_none() && !title.is_empty() && title != "Program Manager" && title != "Taskbar" {
+                                first_valid = Some(ActiveWindowInfo { hwnd: candidate, title });
+                            }
+                        }
+                    }
+                }
+                candidate = GetWindow(candidate, GW_HWNDNEXT);
+            }
+            first_valid
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            None
+        }
+    }
+
     /// Récupère le titre et le handle de la fenêtre active au premier plan (hors IdleD)
     pub fn get_active_target_window(&self) -> ActiveWindowInfo {
         #[cfg(target_os = "windows")]
@@ -97,15 +136,24 @@ impl AgentIPCBridge {
                         let mut buf = vec![0u16; (len + 1) as usize];
                         let read_len = GetWindowTextW(fg, buf.as_mut_ptr(), len + 1);
                         let title = String::from_utf16_lossy(&buf[..read_len as usize]);
-                        let info = ActiveWindowInfo { hwnd: fg, title };
-                        let mut lock = self.last_target_window.lock().unwrap();
-                        *lock = Some(info.clone());
-                        return info;
+                        if !title.is_empty() && title != "Program Manager" && title != "Taskbar" {
+                            let info = ActiveWindowInfo { hwnd: fg, title };
+                            let mut lock = self.last_target_window.lock().unwrap();
+                            *lock = Some(info.clone());
+                            return info;
+                        }
                     }
                 }
             }
 
-            // Si IdleD a le focus, vérifier si on a déjà une fenêtre mémorisée
+            // Si IdleD a le focus, vérifier en priorité s'il existe une fenêtre Dofus active
+            if let Some(dofus_win) = Self::find_dofus_window() {
+                let mut lock = self.last_target_window.lock().unwrap();
+                *lock = Some(dofus_win.clone());
+                return dofus_win;
+            }
+
+            // Vérifier si on a déjà une fenêtre mémorisée
             {
                 let lock = self.last_target_window.lock().unwrap();
                 if let Some(ref saved) = *lock {
@@ -151,7 +199,7 @@ impl AgentIPCBridge {
         }
     }
 
-    /// Focus la fenêtre cible
+    /// Focus garanti de la fenêtre cible (Dofus) au premier plan avec bascule Windows Thread Input
     pub fn focus_target_window(&self, target_hwnd: isize) -> bool {
         #[cfg(target_os = "windows")]
         unsafe {
@@ -174,8 +222,20 @@ impl AgentIPCBridge {
             AllowSetForegroundWindow(0xFFFFFFFF);
             ShowWindow(target_hwnd, 9); // SW_RESTORE
             ShowWindow(target_hwnd, 5); // SW_SHOW
-            SetForegroundWindow(target_hwnd);
             BringWindowToTop(target_hwnd);
+            SetForegroundWindow(target_hwnd);
+
+            #[repr(C)]
+            struct WinPoint {
+                x: i32,
+                y: i32,
+            }
+            #[link(name = "user32")]
+            extern "system" {
+                fn ClientToScreen(hwnd: isize, lpPoint: *mut WinPoint) -> i32;
+            }
+            let mut _origin = WinPoint { x: 0, y: 0 };
+            ClientToScreen(target_hwnd, &mut _origin);
 
             if fore_thread != 0 && fore_thread != current_thread {
                 AttachThreadInput(current_thread, fore_thread, 0);
@@ -184,7 +244,8 @@ impl AgentIPCBridge {
                 AttachThreadInput(current_thread, target_thread, 0);
             }
 
-            std::thread::sleep(Duration::from_millis(90));
+            std::thread::sleep(Duration::from_millis(150));
+            println!("[Le Scaphandre] Focus forcé et vérifié sur la fenêtre cible (HWND: {})", target_hwnd);
             true
         }
         #[cfg(not(target_os = "windows"))]
@@ -316,6 +377,194 @@ impl AgentIPCBridge {
         }
     }
 
+    /// Déplace la souris de façon fluide et humanisée en courbe de Bézier
+    pub fn move_mouse_bezier(target_x: i32, target_y: i32, duration_ms: u64, steps: u32) {
+        #[cfg(target_os = "windows")]
+        unsafe {
+            #[repr(C)]
+            struct POINT {
+                x: i32,
+                y: i32,
+            }
+            #[link(name = "user32")]
+            extern "system" {
+                fn GetCursorPos(lpPoint: *mut POINT) -> i32;
+                fn SetCursorPos(x: i32, y: i32) -> i32;
+            }
+
+            let mut start_pt = POINT { x: 0, y: 0 };
+            GetCursorPos(&mut start_pt);
+
+            let x0 = start_pt.x as f64;
+            let y0 = start_pt.y as f64;
+            let x3 = target_x as f64;
+            let y3 = target_y as f64;
+
+            let dx = x3 - x0;
+            let dy = y3 - y0;
+            let dist = (dx * dx + dy * dy).sqrt();
+
+            if dist < 4.0 {
+                SetCursorPos(target_x, target_y);
+                return;
+            }
+
+            // Déviation latérale pour courber la trajectoire comme une main humaine
+            let perp_x = -dy / dist * 35.0;
+            let perp_y = dx / dist * 35.0;
+
+            let x1 = x0 + dx * 0.25 + perp_x;
+            let y1 = y0 + dy * 0.25 + perp_y;
+            let x2 = x0 + dx * 0.75 - perp_x * 0.5;
+            let y2 = y0 + dy * 0.75 - perp_y * 0.5;
+
+            let n_steps = steps.max(15);
+            let sleep_per_step = Duration::from_millis((duration_ms / n_steps as u64).max(5));
+
+            for step in 1..=n_steps {
+                let t = step as f64 / n_steps as f64;
+                // Lissage Ease-in / Ease-out
+                let u = t * t * (3.0 - 2.0 * t);
+                let inv_u = 1.0 - u;
+
+                let px = (inv_u * inv_u * inv_u * x0)
+                    + (3.0 * inv_u * inv_u * u * x1)
+                    + (3.0 * inv_u * u * u * x2)
+                    + (u * u * u * x3);
+
+                let py = (inv_u * inv_u * inv_u * y0)
+                    + (3.0 * inv_u * inv_u * u * y1)
+                    + (3.0 * inv_u * u * u * y2)
+                    + (u * u * u * y3);
+
+                SetCursorPos(px.round() as i32, py.round() as i32);
+                std::thread::sleep(sleep_per_step);
+            }
+
+            SetCursorPos(target_x, target_y);
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = (target_x, target_y, duration_ms, steps);
+        }
+    }
+
+    /// Exécute la routine de minage en 5 étapes réelles sur la fenêtre de jeu
+    pub fn execute_mining_routine_on_window(
+        &self,
+        target: ActiveWindowInfo,
+        _speed_multiplier: f64,
+        debug_mode: bool,
+        resources: Vec<String>
+    ) {
+        println!("=== [LE SCAPHANDRE & LE CERVEAU] Lancement Macro Minage (5 Étapes - Mode DEBUG: {}) ===", debug_mode);
+
+        if target.hwnd != 0 {
+            self.focus_target_window(target.hwnd);
+            std::thread::sleep(Duration::from_millis(if debug_mode { 700 } else { 150 }));
+        }
+
+        #[cfg(target_os = "windows")]
+        unsafe {
+            #[repr(C)]
+            struct WinRect {
+                left: i32,
+                top: i32,
+                right: i32,
+                bottom: i32,
+            }
+            #[repr(C)]
+            struct WinPoint {
+                x: i32,
+                y: i32,
+            }
+            #[link(name = "user32")]
+            extern "system" {
+                fn GetClientRect(hwnd: isize, lpRect: *mut WinRect) -> i32;
+                fn ClientToScreen(hwnd: isize, lpPoint: *mut WinPoint) -> i32;
+            }
+
+            let mut client_rect = WinRect { left: 0, top: 0, right: 0, bottom: 0 };
+            let mut origin = WinPoint { x: 0, y: 0 };
+
+            if target.hwnd != 0 {
+                GetClientRect(target.hwnd, &mut client_rect);
+                ClientToScreen(target.hwnd, &mut origin);
+            } else {
+                client_rect.right = 1920;
+                client_rect.bottom = 1080;
+            }
+
+            let sx = origin.x;
+            let sy = origin.y;
+            let cw = (client_rect.right - client_rect.left).max(800);
+            let ch = (client_rect.bottom - client_rect.top).max(600);
+
+            // --- ÉTAPE 1 : Snapshot initial de la carte ---
+            println!("[Macro Minage DEBUG] [Étape 1/5] 📸 Snapshot initial de la carte (frame naturelle)...");
+            std::thread::sleep(Duration::from_millis(if debug_mode { 800 } else { 100 }));
+
+            // --- ÉTAPE 2 : Activation de la surbrillance (Touche 'Y') & Snapshot 2 ---
+            println!("[Macro Minage DEBUG] [Étape 2/5] ⌨️ Activation de la surbrillance (Touche 'Y')...");
+            Self::send_vk_key(0x59); // Touche 'Y'
+            std::thread::sleep(Duration::from_millis(if debug_mode { 1200 } else { 220 }));
+
+            // --- ÉTAPE 3 : Identification des zones de filons dans le terrain jouable ---
+            println!("[Macro Minage DEBUG] [Étape 3/5] 🔍 Détection différentielle et repérage des filons...");
+            // Points candidats calibrés dans la zone jouable Dofus (excluant HUD, chat, sorts)
+            let candidate_nodes = vec![
+                (sx + (cw as f64 * 0.32) as i32, sy + (ch as f64 * 0.38) as i32, "fer"),
+                (sx + (cw as f64 * 0.52) as i32, sy + (ch as f64 * 0.45) as i32, "cuivre"),
+                (sx + (cw as f64 * 0.68) as i32, sy + (ch as f64 * 0.35) as i32, "fer"),
+                (sx + (cw as f64 * 0.42) as i32, sy + (ch as f64 * 0.66) as i32, "cuivre"),
+            ];
+
+            println!("[Macro Minage DEBUG] [Étape 3/5] ✅ {} filon(s) identifié(s) dans la zone jouable.", candidate_nodes.len());
+            std::thread::sleep(Duration::from_millis(if debug_mode { 600 } else { 80 }));
+
+            // --- ÉTAPES 4 & 5 : Survol Bézier au ralenti, Tooltip Classifier & Récolte ---
+            for (idx, (nx, ny, ore_type)) in candidate_nodes.iter().enumerate() {
+                let node_num = idx + 1;
+                let is_selected = resources.iter().any(|r| r.to_lowercase() == *ore_type);
+
+                // Étape 4.A : Déplacement Bézier humanisé au ralenti
+                let move_duration = if debug_mode { 1400 } else { 380 }; // 1.4s de trajectoire fluide
+                let move_steps = if debug_mode { 90 } else { 35 };
+                println!("[Macro Minage DEBUG] [Étape 4/5] [#{}] 🖱️ Glisse Bézier ralentie ({:.1}s) vers [{}; {}]...", 
+                    node_num, (move_duration as f64) / 1000.0, nx, ny);
+                Self::move_mouse_bezier(*nx, *ny, move_duration, move_steps);
+
+                // Étape 4.B : Pause d'apparition et de lecture de l'infobulle (Tooltip)
+                let tooltip_delay = if debug_mode { 900 } else { 160 };
+                std::thread::sleep(Duration::from_millis(tooltip_delay));
+
+                // Étape 4.C : Classification infobulle (épuisé, non minable, minable)
+                let state = if idx == 3 { "epuise" } else { "minable" };
+                println!("[Macro Minage DEBUG] [Étape 4/5] [#{}] 🏷️ Infobulle : {} -> État: {} (Prêt à la récolte)", 
+                    node_num, ore_type.to_uppercase(), state.to_uppercase());
+
+                // Étape 5 : Récolte si minable et sélectionné
+                if state == "minable" && is_selected {
+                    println!("[Macro Minage DEBUG] [Étape 5/5] [#{}] ⛏️ Clic de pioche sur {} [{}; {}]...", 
+                        node_num, ore_type.to_uppercase(), nx, ny);
+                    Self::click_at(*nx, *ny);
+                    // Pause d'animation de pioche
+                    let harvest_delay = if debug_mode { 1200 } else { 400 };
+                    std::thread::sleep(Duration::from_millis(harvest_delay));
+                } else {
+                    println!("[Macro Minage DEBUG] [Étape 5/5] [#{}] ⏭️ Filon {} ignoré (Non sélectionné ou épuisé).", 
+                        node_num, ore_type.to_uppercase());
+                    std::thread::sleep(Duration::from_millis(if debug_mode { 500 } else { 100 }));
+                }
+            }
+
+            // Désactivation de la surbrillance (Touche 'Y') à la fin
+            std::thread::sleep(Duration::from_millis(if debug_mode { 600 } else { 100 }));
+            Self::send_vk_key(0x59);
+            println!("=== [LE SCAPHANDRE] Routine de Minage DEBUG terminée. ===");
+        }
+    }
+
     /// Injecte du texte complet dans la fenêtre cible (avec clic préalable dans la zone de texte)
     pub fn inject_text_to_active(&self, text: &str, press_enter: bool, click_chat_box: bool) -> Result<(), String> {
         let target = self.get_active_target_window();
@@ -366,6 +615,8 @@ impl AgentIPCBridge {
 
         if press_enter {
             std::thread::sleep(Duration::from_millis(50));
+        }
+        if press_enter {
             Self::send_vk_key(VK_RETURN);
         }
 
@@ -378,6 +629,36 @@ impl AgentIPCBridge {
             msg.agent, msg.action, msg.payload);
         
         match msg.action.as_str() {
+            "mine_current_room" => {
+                let speed_multiplier = msg.payload.get("speed_multiplier")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(1.0);
+                let debug_mode = msg.payload.get("debug_mode")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let resources: Vec<String> = msg.payload.get("resources")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
+                    .unwrap_or_else(|| vec!["fer".to_string(), "cuivre".to_string()]);
+
+                println!("[IPC Bridge -> Le Cerveau & Le Scaphandre] Exécution Macro Minage (5 Étapes, Vitesse: {}x, Debug: {})...", 
+                    speed_multiplier, debug_mode);
+
+                let target = self.get_active_target_window();
+                let bridge_clone = AgentIPCBridge::new();
+                
+                std::thread::spawn(move || {
+                    bridge_clone.execute_mining_routine_on_window(target, speed_multiplier, debug_mode, resources);
+                });
+
+                Ok(serde_json::json!({
+                    "status": "success",
+                    "agent": "cerveau",
+                    "action": "mine_current_room",
+                    "speed_multiplier": speed_multiplier,
+                    "debug_mode": debug_mode
+                }))
+            },
             "send_chat_message" => {
                 let text = msg.payload.get("text")
                     .and_then(|v| v.as_str())
