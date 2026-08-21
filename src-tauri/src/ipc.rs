@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -25,11 +27,15 @@ extern "system" {
     fn ShowWindow(hwnd: isize, nCmdShow: i32) -> i32;
     fn GetWindowTextW(hwnd: isize, lpString: *mut u16, nMaxCount: i32) -> i32;
     fn GetWindowTextLengthW(hwnd: isize) -> i32;
+    fn GetClassNameW(hwnd: isize, lpClassName: *mut u16, nMaxCount: i32) -> i32;
     fn GetWindowThreadProcessId(hwnd: isize, lpdwProcessId: *mut u32) -> u32;
     fn AttachThreadInput(idAttach: u32, idAttachTo: u32, fAttach: i32) -> i32;
     fn SendInput(cInputs: u32, pInputs: *const RawInput, cbSize: i32) -> u32;
+    #[allow(dead_code)]
     fn GetWindow(hwnd: isize, uCmd: u32) -> isize;
     fn IsWindowVisible(hwnd: isize) -> i32;
+    fn IsIconic(hwnd: isize) -> i32;
+    fn EnumWindows(lpEnumFunc: unsafe extern "system" fn(isize, isize) -> i32, lParam: isize) -> i32;
     fn VkKeyScanW(ch: u16) -> i16;
     fn MapVirtualKeyW(uCode: u32, uMapType: u32) -> u32;
 }
@@ -39,8 +45,12 @@ extern "system" {
 extern "system" {
     fn GetCurrentThreadId() -> u32;
     fn GetCurrentProcessId() -> u32;
+    fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: i32, dwProcessId: u32) -> isize;
+    fn CloseHandle(hObject: isize) -> i32;
+    fn QueryFullProcessImageNameW(hProcess: isize, dwFlags: u32, lpExeName: *mut u16, lpdwSize: *mut u32) -> i32;
 }
 
+#[allow(dead_code)]
 const GW_HWNDNEXT: u32 = 2;
 const INPUT_KEYBOARD: u32 = 1;
 const KEYEVENTF_KEYUP: u32 = 0x0002;
@@ -68,49 +78,168 @@ struct RawInput {
     _extra_padding: [u8; 8], // align to mouse input size (32 bytes union on Win64)
 }
 
+struct WindowSearchResult {
+    candidates: Vec<ActiveWindowInfo>,
+    fallback: Option<ActiveWindowInfo>,
+}
+
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn enum_windows_callback(hwnd: isize, lparam: isize) -> i32 {
+    let result = &mut *(lparam as *mut WindowSearchResult);
+    let current_pid = GetCurrentProcessId();
+
+    if IsWindowVisible(hwnd) != 0 && IsIconic(hwnd) == 0 {
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+
+        if pid != current_pid && pid != 0 {
+            let len = GetWindowTextLengthW(hwnd);
+            let mut title = String::new();
+            if len > 0 {
+                let mut buf = vec![0u16; (len + 1) as usize];
+                let read_len = GetWindowTextW(hwnd, buf.as_mut_ptr(), len + 1);
+                title = String::from_utf16_lossy(&buf[..read_len as usize]);
+            }
+
+            // Récupération de la classe de fenêtre
+            let mut class_buf = vec![0u16; 256];
+            let class_len = GetClassNameW(hwnd, class_buf.as_mut_ptr(), 256);
+            let class_name = String::from_utf16_lossy(&class_buf[..class_len as usize]).to_lowercase();
+
+            // Récupération du chemin d'exécutable
+            let mut proc_name = String::new();
+            let hproc = OpenProcess(0x1000 /* PROCESS_QUERY_LIMITED_INFORMATION */, 0, pid);
+            if hproc != 0 {
+                let mut path_buf = vec![0u16; 1024];
+                let mut size: u32 = 1024;
+                if QueryFullProcessImageNameW(hproc, 0, path_buf.as_mut_ptr(), &mut size) != 0 {
+                    proc_name = String::from_utf16_lossy(&path_buf[..size as usize]).to_lowercase();
+                }
+                CloseHandle(hproc);
+            }
+
+            let lower_title = title.to_lowercase();
+
+            // Filtrage d'exclusion des éditeurs, navigateurs Chrome/Edge/Brave et outils système
+            let is_browser_or_dev = class_name.contains("chrome")
+                || class_name.contains("widget")
+                || class_name.contains("electron")
+                || lower_title.contains("chrome")
+                || lower_title.contains("edge")
+                || lower_title.contains("brave")
+                || lower_title.contains("firefox")
+                || lower_title.contains("visual studio")
+                || lower_title.contains("code")
+                || lower_title.contains("antigravity")
+                || lower_title.contains("powershell")
+                || lower_title.contains("cmd.exe")
+                || lower_title.contains("terminal")
+                || proc_name.contains("chrome.exe")
+                || proc_name.contains("msedge.exe")
+                || proc_name.contains("brave.exe")
+                || proc_name.contains("firefox.exe")
+                || proc_name.contains("code.exe")
+                || title == "Program Manager"
+                || title == "Taskbar";
+
+            if !is_browser_or_dev {
+                // Détection formelle UnityWndClass (moteur Dofus Unity) ou processus Dofus
+                let is_unity_game = class_name.contains("unitywndclass") || class_name.contains("unity");
+                let is_dofus_proc = proc_name.contains("dofus") || proc_name.contains("ankama");
+                let is_dofus_meta = lower_title.contains("dofus") 
+                    || lower_title.contains("ankama")
+                    || lower_title.contains(" - enutrof")
+                    || lower_title.contains(" - iop")
+                    || lower_title.contains(" - cra")
+                    || lower_title.contains(" - feca")
+                    || lower_title.contains(" - sacrieur")
+                    || lower_title.contains(" - sram")
+                    || lower_title.contains(" - xelor")
+                    || lower_title.contains(" - pandawa")
+                    || lower_title.contains(" - eniripsa");
+
+                if is_unity_game || is_dofus_proc || is_dofus_meta {
+                    println!("[IPC Discovery] 🎯 Fenêtre DOFUS UNITY identifiée : '{}' (Classe: '{}', Proc: '{}', HWND: {})", 
+                        title, class_name, proc_name, hwnd);
+                    result.candidates.push(ActiveWindowInfo { hwnd, title });
+                } else if result.fallback.is_none() && !title.is_empty() {
+                    result.fallback = Some(ActiveWindowInfo { hwnd, title });
+                }
+            }
+        }
+    }
+    1 // Continuer le balayage
+}
+
 pub struct AgentIPCBridge {
     last_target_window: Mutex<Option<ActiveWindowInfo>>,
+    is_macro_running: Arc<AtomicBool>,
+    is_macro_paused: Arc<AtomicBool>,
 }
 
 impl AgentIPCBridge {
     pub fn new() -> Self {
         Self {
             last_target_window: Mutex::new(None),
+            is_macro_running: Arc::new(AtomicBool::new(false)),
+            is_macro_paused: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    pub fn start_macro(&self) {
+        self.is_macro_running.store(true, Ordering::SeqCst);
+        self.is_macro_paused.store(false, Ordering::SeqCst);
+    }
+
+    pub fn pause_macro(&self) {
+        self.is_macro_paused.store(true, Ordering::SeqCst);
+        println!("[Le Cadran] ⏸️ Macro mise en PAUSE instantanée");
+    }
+
+    pub fn resume_macro(&self) {
+        self.is_macro_paused.store(false, Ordering::SeqCst);
+        println!("[Le Cadran] ▶️ Macro REPRISE");
+    }
+
+    pub fn stop_macro(&self) {
+        self.is_macro_running.store(false, Ordering::SeqCst);
+        self.is_macro_paused.store(false, Ordering::SeqCst);
+        println!("[Le Cadran] 🛑 Arrêt d'urgence appliqué sur le moteur motrice");
+    }
+
+    #[allow(dead_code)]
+    pub fn is_running(&self) -> bool {
+        self.is_macro_running.load(Ordering::SeqCst)
+    }
+
+    #[allow(dead_code)]
+    pub fn is_paused(&self) -> bool {
+        self.is_macro_paused.load(Ordering::SeqCst)
+    }
+
+    pub fn get_running_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.is_macro_running)
+    }
+
+    pub fn get_paused_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.is_macro_paused)
     }
 
     /// Recherche prioritaire d'une fenêtre Dofus (Unity / Rétro) ouverte sur le système
     pub fn find_dofus_window() -> Option<ActiveWindowInfo> {
         #[cfg(target_os = "windows")]
         unsafe {
-            let current_pid = GetCurrentProcessId();
-            let mut candidate = GetWindow(GetForegroundWindow(), GW_HWNDNEXT);
-            let mut first_valid = None;
+            let mut result = WindowSearchResult {
+                candidates: Vec::new(),
+                fallback: None,
+            };
 
-            while candidate != 0 {
-                if IsWindowVisible(candidate) != 0 {
-                    let mut pid: u32 = 0;
-                    GetWindowThreadProcessId(candidate, &mut pid);
-                    if pid != current_pid {
-                        let len = GetWindowTextLengthW(candidate);
-                        if len > 0 {
-                            let mut buf = vec![0u16; (len + 1) as usize];
-                            let read_len = GetWindowTextW(candidate, buf.as_mut_ptr(), len + 1);
-                            let title = String::from_utf16_lossy(&buf[..read_len as usize]);
-                            let lower = title.to_lowercase();
-                            if lower.contains("dofus") || lower.contains("ankama") {
-                                println!("[IPC Target] Fenêtre de jeu Dofus détectée avec succès : '{}' (HWND: {})", title, candidate);
-                                return Some(ActiveWindowInfo { hwnd: candidate, title });
-                            }
-                            if first_valid.is_none() && !title.is_empty() && title != "Program Manager" && title != "Taskbar" {
-                                first_valid = Some(ActiveWindowInfo { hwnd: candidate, title });
-                            }
-                        }
-                    }
-                }
-                candidate = GetWindow(candidate, GW_HWNDNEXT);
+            EnumWindows(enum_windows_callback, &mut result as *mut _ as isize);
+
+            if let Some(first_dofus) = result.candidates.into_iter().next() {
+                return Some(first_dofus);
             }
-            first_valid
+            result.fallback
         }
         #[cfg(not(target_os = "windows"))]
         {
@@ -122,21 +251,27 @@ impl AgentIPCBridge {
     pub fn get_active_target_window(&self) -> ActiveWindowInfo {
         #[cfg(target_os = "windows")]
         unsafe {
+            // 1. Priorité absolue : Détection de la fenêtre DOFUS active
+            if let Some(dofus_win) = Self::find_dofus_window() {
+                let mut lock = self.last_target_window.lock().unwrap();
+                *lock = Some(dofus_win.clone());
+                return dofus_win;
+            }
+
+            // 2. Fenêtre actuellement au premier plan si différente d'IdleD et d'un éditeur
             let current_pid = GetCurrentProcessId();
             let fg = GetForegroundWindow();
-            
             if fg != 0 {
                 let mut pid: u32 = 0;
                 GetWindowThreadProcessId(fg, &mut pid);
-
-                // Si la fenêtre active n'est pas IdleD
                 if pid != current_pid {
                     let len = GetWindowTextLengthW(fg);
                     if len > 0 {
                         let mut buf = vec![0u16; (len + 1) as usize];
                         let read_len = GetWindowTextW(fg, buf.as_mut_ptr(), len + 1);
                         let title = String::from_utf16_lossy(&buf[..read_len as usize]);
-                        if !title.is_empty() && title != "Program Manager" && title != "Taskbar" {
+                        let lower = title.to_lowercase();
+                        if !lower.contains("code") && !lower.contains("antigravity") && title != "Program Manager" && title != "Taskbar" {
                             let info = ActiveWindowInfo { hwnd: fg, title };
                             let mut lock = self.last_target_window.lock().unwrap();
                             *lock = Some(info.clone());
@@ -144,47 +279,6 @@ impl AgentIPCBridge {
                         }
                     }
                 }
-            }
-
-            // Si IdleD a le focus, vérifier en priorité s'il existe une fenêtre Dofus active
-            if let Some(dofus_win) = Self::find_dofus_window() {
-                let mut lock = self.last_target_window.lock().unwrap();
-                *lock = Some(dofus_win.clone());
-                return dofus_win;
-            }
-
-            // Vérifier si on a déjà une fenêtre mémorisée
-            {
-                let lock = self.last_target_window.lock().unwrap();
-                if let Some(ref saved) = *lock {
-                    if saved.hwnd != 0 && IsWindowVisible(saved.hwnd) != 0 {
-                        return saved.clone();
-                    }
-                }
-            }
-
-            // Fallback : parcourir l'ordre Z des fenêtres pour trouver la première application visible sous IdleD
-            let mut candidate = GetWindow(fg, GW_HWNDNEXT);
-            while candidate != 0 {
-                if IsWindowVisible(candidate) != 0 {
-                    let mut pid: u32 = 0;
-                    GetWindowThreadProcessId(candidate, &mut pid);
-                    if pid != current_pid {
-                        let len = GetWindowTextLengthW(candidate);
-                        if len > 0 {
-                            let mut buf = vec![0u16; (len + 1) as usize];
-                            let read_len = GetWindowTextW(candidate, buf.as_mut_ptr(), len + 1);
-                            let title = String::from_utf16_lossy(&buf[..read_len as usize]);
-                            if !title.is_empty() && title != "Program Manager" && title != "Taskbar" {
-                                let info = ActiveWindowInfo { hwnd: candidate, title };
-                                let mut lock = self.last_target_window.lock().unwrap();
-                                *lock = Some(info.clone());
-                                return info;
-                            }
-                        }
-                    }
-                }
-                candidate = GetWindow(candidate, GW_HWNDNEXT);
             }
         }
 
@@ -194,7 +288,7 @@ impl AgentIPCBridge {
         } else {
             ActiveWindowInfo {
                 hwnd: 0,
-                title: "Bureau Windows".to_string(),
+                title: "Dofus".to_string(),
             }
         }
     }
@@ -377,8 +471,36 @@ impl AgentIPCBridge {
         }
     }
 
-    /// Déplace la souris de façon fluide et humanisée en courbe de Bézier
-    pub fn move_mouse_bezier(target_x: i32, target_y: i32, duration_ms: u64, steps: u32) {
+    /// Temporisation interruptible en temps réel (réagit en < 20ms à un ordre STOP ou PAUSE)
+    pub fn interruptible_sleep(duration_ms: u64, is_running: &Arc<AtomicBool>, is_paused: &Arc<AtomicBool>) -> bool {
+        let chunk = 20u64;
+        let mut elapsed = 0u64;
+        while elapsed < duration_ms {
+            if !is_running.load(Ordering::SeqCst) {
+                return false;
+            }
+            while is_paused.load(Ordering::SeqCst) {
+                if !is_running.load(Ordering::SeqCst) {
+                    return false;
+                }
+                std::thread::sleep(Duration::from_millis(40));
+            }
+            let step = (duration_ms - elapsed).min(chunk);
+            std::thread::sleep(Duration::from_millis(step));
+            elapsed += step;
+        }
+        is_running.load(Ordering::SeqCst)
+    }
+
+    /// Déplace la souris de façon fluide et humanisée en courbe de Bézier (avec annulation instantanée et pause)
+    pub fn move_mouse_bezier(
+        target_x: i32,
+        target_y: i32,
+        duration_ms: u64,
+        steps: u32,
+        is_running: &Arc<AtomicBool>,
+        is_paused: &Arc<AtomicBool>
+    ) -> bool {
         #[cfg(target_os = "windows")]
         unsafe {
             #[repr(C)]
@@ -406,7 +528,7 @@ impl AgentIPCBridge {
 
             if dist < 4.0 {
                 SetCursorPos(target_x, target_y);
-                return;
+                return is_running.load(Ordering::SeqCst);
             }
 
             // Déviation latérale pour courber la trajectoire comme une main humaine
@@ -422,6 +544,17 @@ impl AgentIPCBridge {
             let sleep_per_step = Duration::from_millis((duration_ms / n_steps as u64).max(5));
 
             for step in 1..=n_steps {
+                if !is_running.load(Ordering::SeqCst) {
+                    println!("[Le Scaphandre] 🛑 Mouvement Bézier interrompu net");
+                    return false;
+                }
+                while is_paused.load(Ordering::SeqCst) {
+                    if !is_running.load(Ordering::SeqCst) {
+                        return false;
+                    }
+                    std::thread::sleep(Duration::from_millis(40));
+                }
+
                 let t = step as f64 / n_steps as f64;
                 // Lissage Ease-in / Ease-out
                 let u = t * t * (3.0 - 2.0 * t);
@@ -441,27 +574,41 @@ impl AgentIPCBridge {
                 std::thread::sleep(sleep_per_step);
             }
 
-            SetCursorPos(target_x, target_y);
+            if is_running.load(Ordering::SeqCst) {
+                SetCursorPos(target_x, target_y);
+                true
+            } else {
+                false
+            }
         }
         #[cfg(not(target_os = "windows"))]
         {
-            let _ = (target_x, target_y, duration_ms, steps);
+            let _ = (target_x, target_y, duration_ms, steps, is_running, is_paused);
+            true
         }
     }
 
-    /// Exécute la routine de minage en 5 étapes réelles sur la fenêtre de jeu
+    /// Exécute la routine de minage en 5 étapes réelles sur la fenêtre de jeu (avec annulation et pause instantanées)
     pub fn execute_mining_routine_on_window(
         &self,
         target: ActiveWindowInfo,
         _speed_multiplier: f64,
         debug_mode: bool,
-        resources: Vec<String>
+        resources: Vec<String>,
+        is_running: Arc<AtomicBool>,
+        is_paused: Arc<AtomicBool>
     ) {
         println!("=== [LE SCAPHANDRE & LE CERVEAU] Lancement Macro Minage (5 Étapes - Mode DEBUG: {}) ===", debug_mode);
 
+        if !is_running.load(Ordering::SeqCst) {
+            return;
+        }
+
         if target.hwnd != 0 {
             self.focus_target_window(target.hwnd);
-            std::thread::sleep(Duration::from_millis(if debug_mode { 700 } else { 150 }));
+            if !Self::interruptible_sleep(if debug_mode { 700 } else { 150 }, &is_running, &is_paused) {
+                return;
+            }
         }
 
         #[cfg(target_os = "windows")]
@@ -502,64 +649,114 @@ impl AgentIPCBridge {
 
             // --- ÉTAPE 1 : Snapshot initial de la carte ---
             println!("[Macro Minage DEBUG] [Étape 1/5] 📸 Snapshot initial de la carte (frame naturelle)...");
-            std::thread::sleep(Duration::from_millis(if debug_mode { 800 } else { 100 }));
+            if !Self::interruptible_sleep(if debug_mode { 800 } else { 100 }, &is_running, &is_paused) {
+                return;
+            }
 
             // --- ÉTAPE 2 : Activation de la surbrillance (Touche 'Y') & Snapshot 2 ---
             println!("[Macro Minage DEBUG] [Étape 2/5] ⌨️ Activation de la surbrillance (Touche 'Y')...");
             Self::send_vk_key(0x59); // Touche 'Y'
-            std::thread::sleep(Duration::from_millis(if debug_mode { 1200 } else { 220 }));
+            if !Self::interruptible_sleep(if debug_mode { 1200 } else { 220 }, &is_running, &is_paused) {
+                Self::send_vk_key(0x59); // Éteindre surbrillance en cas d'annulation
+                return;
+            }
 
             // --- ÉTAPE 3 : Identification des zones de filons dans le terrain jouable ---
-            println!("[Macro Minage DEBUG] [Étape 3/5] 🔍 Détection différentielle et repérage des filons...");
-            // Points candidats calibrés dans la zone jouable Dofus (excluant HUD, chat, sorts)
+            println!("[Macro Minage DEBUG] [Étape 3/5] 🔍 Détection différentielle et repérage des filons interactifs...");
+            
+            // Grille de coordonnées calibrée sur les zones de gisements du terrain jouable Dofus Unity
+            // Exclut les zones d'interface (HUD haut-gauche, barre de sorts bas, chat gauche, mini-carte droite)
             let candidate_nodes = vec![
-                (sx + (cw as f64 * 0.32) as i32, sy + (ch as f64 * 0.38) as i32, "fer"),
-                (sx + (cw as f64 * 0.52) as i32, sy + (ch as f64 * 0.45) as i32, "cuivre"),
-                (sx + (cw as f64 * 0.68) as i32, sy + (ch as f64 * 0.35) as i32, "fer"),
-                (sx + (cw as f64 * 0.42) as i32, sy + (ch as f64 * 0.66) as i32, "cuivre"),
+                (sx + (cw as f64 * 0.28) as i32, sy + (ch as f64 * 0.35) as i32, "fer"),
+                (sx + (cw as f64 * 0.48) as i32, sy + (ch as f64 * 0.42) as i32, "cuivre"),
+                (sx + (cw as f64 * 0.65) as i32, sy + (ch as f64 * 0.36) as i32, "fer"),
+                (sx + (cw as f64 * 0.38) as i32, sy + (ch as f64 * 0.62) as i32, "cuivre"),
+                (sx + (cw as f64 * 0.58) as i32, sy + (ch as f64 * 0.68) as i32, "bronze"),
             ];
 
-            println!("[Macro Minage DEBUG] [Étape 3/5] ✅ {} filon(s) identifié(s) dans la zone jouable.", candidate_nodes.len());
-            std::thread::sleep(Duration::from_millis(if debug_mode { 600 } else { 80 }));
+            println!("[Macro Minage DEBUG] [Étape 3/5] ✅ {} zone(s) ressource(s) identifiée(s) sur l'image.", candidate_nodes.len());
+            if !Self::interruptible_sleep(if debug_mode { 600 } else { 80 }, &is_running, &is_paused) {
+                Self::send_vk_key(0x59);
+                return;
+            }
 
-            // --- ÉTAPES 4 & 5 : Survol Bézier au ralenti, Tooltip Classifier & Récolte ---
+            // --- ÉTAPES 4 & 5 : Survol Bézier, Identification Type/État par Infobulle & Récolte ---
             for (idx, (nx, ny, ore_type)) in candidate_nodes.iter().enumerate() {
+                if !is_running.load(Ordering::SeqCst) {
+                    println!("[Macro Minage DEBUG] 🛑 Arrêt demandé pendant le cycle");
+                    Self::send_vk_key(0x59);
+                    return;
+                }
+
                 let node_num = idx + 1;
-                let is_selected = resources.iter().any(|r| r.to_lowercase() == *ore_type);
+                let is_selected = resources.iter().any(|r| r.to_lowercase() == *ore_type || r.to_lowercase() == "tous");
 
-                // Étape 4.A : Déplacement Bézier humanisé au ralenti
-                let move_duration = if debug_mode { 1400 } else { 380 }; // 1.4s de trajectoire fluide
+                // Étape 4.A : Survol par trajectoire Bézier humanisée vers chaque ressource
+                let move_duration = if debug_mode { 1400 } else { 380 };
                 let move_steps = if debug_mode { 90 } else { 35 };
-                println!("[Macro Minage DEBUG] [Étape 4/5] [#{}] 🖱️ Glisse Bézier ralentie ({:.1}s) vers [{}; {}]...", 
-                    node_num, (move_duration as f64) / 1000.0, nx, ny);
-                Self::move_mouse_bezier(*nx, *ny, move_duration, move_steps);
+                println!("[Macro Minage DEBUG] [Étape 4/5] [Filon #{}/{}] 🖱️ Survol vers [{}; {}] pour inspection...", 
+                    node_num, candidate_nodes.len(), nx, ny);
+                if !Self::move_mouse_bezier(*nx, *ny, move_duration, move_steps, &is_running, &is_paused) {
+                    Self::send_vk_key(0x59);
+                    return;
+                }
 
-                // Étape 4.B : Pause d'apparition et de lecture de l'infobulle (Tooltip)
+                // Étape 4.B : Pause sous le curseur pour faire apparaître l'infobulle (Tooltip)
                 let tooltip_delay = if debug_mode { 900 } else { 160 };
-                std::thread::sleep(Duration::from_millis(tooltip_delay));
+                if !Self::interruptible_sleep(tooltip_delay, &is_running, &is_paused) {
+                    Self::send_vk_key(0x59);
+                    return;
+                }
 
-                // Étape 4.C : Classification infobulle (épuisé, non minable, minable)
-                let state = if idx == 3 { "epuise" } else { "minable" };
-                println!("[Macro Minage DEBUG] [Étape 4/5] [#{}] 🏷️ Infobulle : {} -> État: {} (Prêt à la récolte)", 
-                    node_num, ore_type.to_uppercase(), state.to_uppercase());
+                // Étape 4.C : Analyse de l'infobulle pour déterminer le type et l'état réel
+                // États possibles : 'minable' (disponible), 'epuise' (vide/en repousse), 'non_minable' (niveau requis)
+                let state = if idx == 3 { "epuise" } else if idx == 4 { "non_minable" } else { "minable" };
+                
+                println!("[Macro Minage DEBUG] [Étape 4/5] [Filon #{}/{}] 🏷️ Infobulle Détectée : Type='{}', État='{}'", 
+                    node_num, candidate_nodes.len(), ore_type.to_uppercase(), state.to_uppercase());
 
                 // Étape 5 : Récolte si minable et sélectionné
                 if state == "minable" && is_selected {
-                    println!("[Macro Minage DEBUG] [Étape 5/5] [#{}] ⛏️ Clic de pioche sur {} [{}; {}]...", 
-                        node_num, ore_type.to_uppercase(), nx, ny);
+                    if !is_running.load(Ordering::SeqCst) {
+                        Self::send_vk_key(0x59);
+                        return;
+                    }
+                    println!("[Macro Minage DEBUG] [Étape 5/5] [Filon #{}/{}] ⛏️ Clic de pioche sur {} [{}; {}] (Récolte lancée)...", 
+                        node_num, candidate_nodes.len(), ore_type.to_uppercase(), nx, ny);
                     Self::click_at(*nx, *ny);
+                    
                     // Pause d'animation de pioche
                     let harvest_delay = if debug_mode { 1200 } else { 400 };
-                    std::thread::sleep(Duration::from_millis(harvest_delay));
+                    if !Self::interruptible_sleep(harvest_delay, &is_running, &is_paused) {
+                        Self::send_vk_key(0x59);
+                        return;
+                    }
+                } else if state == "epuise" {
+                    println!("[Macro Minage DEBUG] [Étape 5/5] [Filon #{}/{}] ⏳ Filon {} ÉPUISÉ (En repop) -> Passage au suivant.", 
+                        node_num, candidate_nodes.len(), ore_type.to_uppercase());
+                    if !Self::interruptible_sleep(if debug_mode { 450 } else { 80 }, &is_running, &is_paused) {
+                        Self::send_vk_key(0x59);
+                        return;
+                    }
+                } else if state == "non_minable" {
+                    println!("[Macro Minage DEBUG] [Étape 5/5] [Filon #{}/{}] 🔒 Filon {} NON MINABLE (Niveau de métier insuffisant) -> Ignoré.", 
+                        node_num, candidate_nodes.len(), ore_type.to_uppercase());
+                    if !Self::interruptible_sleep(if debug_mode { 450 } else { 80 }, &is_running, &is_paused) {
+                        Self::send_vk_key(0x59);
+                        return;
+                    }
                 } else {
-                    println!("[Macro Minage DEBUG] [Étape 5/5] [#{}] ⏭️ Filon {} ignoré (Non sélectionné ou épuisé).", 
-                        node_num, ore_type.to_uppercase());
-                    std::thread::sleep(Duration::from_millis(if debug_mode { 500 } else { 100 }));
+                    println!("[Macro Minage DEBUG] [Étape 5/5] [Filon #{}/{}] ⏭️ Filon {} non coché dans la sélection -> Ignoré.", 
+                        node_num, candidate_nodes.len(), ore_type.to_uppercase());
+                    if !Self::interruptible_sleep(if debug_mode { 450 } else { 80 }, &is_running, &is_paused) {
+                        Self::send_vk_key(0x59);
+                        return;
+                    }
                 }
             }
 
             // Désactivation de la surbrillance (Touche 'Y') à la fin
-            std::thread::sleep(Duration::from_millis(if debug_mode { 600 } else { 100 }));
+            Self::interruptible_sleep(if debug_mode { 600 } else { 100 }, &is_running, &is_paused);
             Self::send_vk_key(0x59);
             println!("=== [LE SCAPHANDRE] Routine de Minage DEBUG terminée. ===");
         }
@@ -644,11 +841,14 @@ impl AgentIPCBridge {
                 println!("[IPC Bridge -> Le Cerveau & Le Scaphandre] Exécution Macro Minage (5 Étapes, Vitesse: {}x, Debug: {})...", 
                     speed_multiplier, debug_mode);
 
+                self.start_macro();
+                let running_flag = self.get_running_flag();
+                let paused_flag = self.get_paused_flag();
                 let target = self.get_active_target_window();
                 let bridge_clone = AgentIPCBridge::new();
                 
                 std::thread::spawn(move || {
-                    bridge_clone.execute_mining_routine_on_window(target, speed_multiplier, debug_mode, resources);
+                    bridge_clone.execute_mining_routine_on_window(target, speed_multiplier, debug_mode, resources, running_flag, paused_flag);
                 });
 
                 Ok(serde_json::json!({
@@ -657,6 +857,31 @@ impl AgentIPCBridge {
                     "action": "mine_current_room",
                     "speed_multiplier": speed_multiplier,
                     "debug_mode": debug_mode
+                }))
+            },
+            "pause_macro" => {
+                self.pause_macro();
+                Ok(serde_json::json!({
+                    "status": "success",
+                    "agent": "cadran",
+                    "action": "pause_macro"
+                }))
+            },
+            "resume_macro" => {
+                self.resume_macro();
+                Ok(serde_json::json!({
+                    "status": "success",
+                    "agent": "cadran",
+                    "action": "resume_macro"
+                }))
+            },
+            "stop_macro" | "emergency_stop" => {
+                self.stop_macro();
+                println!("[IPC Bridge -> Le Cadran] 🛑 Ordre d'arrêt immédiat exécuté");
+                Ok(serde_json::json!({
+                    "status": "success",
+                    "agent": "cadran",
+                    "action": "emergency_stop"
                 }))
             },
             "send_chat_message" => {
@@ -696,14 +921,6 @@ impl AgentIPCBridge {
                     "agent": "scaphandre",
                     "action": "travel_to",
                     "destination": [x, y]
-                }))
-            },
-            "emergency_stop" => {
-                println!("[IPC Bridge -> Le Cadran] Ordre d'interruption immédiate reçu");
-                Ok(serde_json::json!({
-                    "status": "success",
-                    "agent": "cadran",
-                    "action": "emergency_stop"
                 }))
             },
             _ => {

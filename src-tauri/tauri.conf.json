@@ -52,10 +52,12 @@
     "windows": [
       {
         "fullscreen": false,
-        "height": 480,
-        "resizable": false,
+        "height": 650,
+        "resizable": true,
+        "minHeight": 480,
+        "minWidth": 280,
         "title": "IdleD",
-        "width": 300,
+        "width": 320,
         "alwaysOnTop": true,
         "transparent": true,
         "decorations": true

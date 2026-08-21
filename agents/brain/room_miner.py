@@ -258,6 +258,99 @@ class RoomMinerRoutine:
             log_fn=log_fn
         )
 
+    def execute_interactive_map_analysis(
+        self,
+        capture_frame_fn: Callable[[], Any],
+        press_key_fn: Callable[[str], None],
+        move_cursor_fn: Optional[Callable[[int, int], None]] = None,
+        read_tooltip_fn: Optional[Callable[[], Dict[str, Any]]] = None,
+        sleep_fn: Optional[Callable[[float], None]] = None,
+        speed_multiplier: float = 0.5,
+        log_fn: Optional[Callable[[str], None]] = None
+    ) -> Dict[str, Any]:
+        """
+        Analyse et cartographie exhaustive de TOUS les objets interactifs de la carte courante :
+        1. Snapshot initial (frame naturelle)
+        2. Activation de la surbrillance (Touche 'Y') & Snapshot halo
+        3. Détection et extraction de toutes les zones en surbrillance
+        4. Survol physique ralenti de chaque objet avec Le Scaphandre
+        5. Lecture & confirmation par infobulle (Type d'objet, Catégorie, État)
+        6. Extinction de la touche 'Y' et retour du catalogue cartographié
+        """
+        _sleep = sleep_fn if sleep_fn is not None else time.sleep
+        _log = log_fn if log_fn is not None else print
+        delay_scale = 1.0 / max(0.1, speed_multiplier)
+
+        _log(f"=== [ANALYSE CARTOGRAPHIQUE INTERACTIVE - VITESSE {speed_multiplier}x (DEBUG)] ===")
+
+        # 1. Snapshot initial
+        _log("[Analyse Map DEBUG] [1/5] 📸 Snapshot initial de la carte...")
+        frame_natural = capture_frame_fn()
+        _sleep(0.08 * delay_scale)
+
+        # 2. Surbrillance touche 'Y'
+        _log("[Analyse Map DEBUG] [2/5] ⌨️ Activation de la surbrillance (Touche 'Y')...")
+        press_key_fn('y')
+        _sleep(0.18 * delay_scale)
+        frame_highlight = capture_frame_fn()
+
+        # 3. Détection de toutes les zones interactives
+        _log("[Analyse Map DEBUG] [3/5] 🔍 Détection de toutes les zones interactives...")
+        from agents.vision.map_analyzer import MapInteractiveAnalyzer
+        analyzer = MapInteractiveAnalyzer()
+        zones = analyzer.detect_interactive_zones(frame_natural, frame_highlight)
+        _log(f"[Analyse Map DEBUG] [3/5] ✅ {len(zones)} zone(s) interactive(s) détectée(s).")
+
+        catalog = []
+        ordered_zones = self.sort_nodes_by_proximity(zones)
+
+        # 4 & 5. Survol systématique et lecture d'infobulle
+        for idx, zone in enumerate(ordered_zones, 1):
+            zx, zy = zone.get("x", 0), zone.get("y", 0)
+            _log(f"[Analyse Map DEBUG] [4/5] [Objet #{idx}/{len(ordered_zones)}] 🖱️ Survol vers [{zx}, {zy}]...")
+            if move_cursor_fn:
+                move_cursor_fn(zx, zy)
+
+            _sleep(0.14 * delay_scale)
+
+            tooltip_data = {}
+            if read_tooltip_fn:
+                try:
+                    tooltip_data = read_tooltip_fn() or {}
+                except Exception as e:
+                    _log(f"[Analyse Map DEBUG] [5/5] Erreur lecture infobulle : {e}")
+                    tooltip_data = {}
+
+            classification = MapInteractiveAnalyzer.classify_interactive_tooltip(tooltip_data)
+            obj_type = classification.get("object_type", "inconnu")
+            category = classification.get("category", "interactif")
+            state = classification.get("state", "disponible")
+            label = classification.get("label", "Objet Interactif")
+
+            _log(f"[Analyse Map DEBUG] [5/5] [Objet #{idx}/{len(ordered_zones)}] 🏷️ Confirmé : {label} ({category.upper()}) -> État: {state.upper()}")
+
+            catalog.append({
+                "index": idx,
+                "x": zx,
+                "y": zy,
+                "object_type": obj_type,
+                "category": category,
+                "state": state,
+                "label": label,
+                "confidence": zone.get("confidence", 0.85)
+            })
+
+        # 6. Extinction de la surbrillance
+        press_key_fn('y')
+        _log(f"=== [ANALYSE CARTE TERMINÉE] {len(catalog)} objets interactifs répertoriés. ===")
+
+        return {
+            "success": True,
+            "speed_multiplier": speed_multiplier,
+            "total_interactive_objects": len(catalog),
+            "objects": catalog
+        }
+
 if __name__ == "__main__":
     routine = RoomMinerRoutine(default_selected_ores=["fer"])
     dummy_nodes = [
@@ -266,3 +359,4 @@ if __name__ == "__main__":
     ]
     report = routine.execute_room_mining(dummy_nodes, selected_ores=["fer"], speed_multiplier=0.5)
     print("[Macro Minage DEBUG 0.5x] Rapport ->", report)
+

@@ -39,6 +39,13 @@ fn set_supervisor_state(new_state: String, state: State<'_, Mutex<AppState>>) ->
         "EmergencyStop" => SupervisorState::EmergencyStop,
         _ => SupervisorState::Idle,
     };
+    if target == SupervisorState::Paused {
+        app.ipc.pause_macro();
+    } else if target == SupervisorState::Harvesting || target == SupervisorState::Navigation {
+        app.ipc.resume_macro();
+    } else if target == SupervisorState::EmergencyStop || target == SupervisorState::Idle {
+        app.ipc.stop_macro();
+    }
     let updated = app.fsm.transition_to(target)?;
     Ok(format!("{:?}", updated))
 }
@@ -100,8 +107,10 @@ fn trigger_directional_move(direction: String, window: tauri::Window, state: Sta
 #[tauri::command]
 fn trigger_emergency_stop(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
     let app = state.lock().unwrap();
+    app.ipc.stop_macro();
     app.hotkeys.trigger_emergency_stop();
     let _ = app.fsm.transition_to(SupervisorState::EmergencyStop);
+    println!("[Superviseur Rust] 🛑 Arrêt d'urgence appliqué sur FSM et moteur motrice");
     Ok("Arrêt d'urgence déclenché".into())
 }
 

@@ -298,13 +298,13 @@ impl Win32StreamCapture {
                 let lum = (r * 299 + g * 587 + b * 114) / 1000;
                 let diff_rg = if r > g { r - g } else { g - r };
                 let diff_gb = if g > b { g - b } else { b - g };
-                lum > 125 && diff_rg < 45 && diff_gb < 45
+                lum > 110 && diff_rg < 55 && diff_gb < 55
             } else {
                 false
             }
         };
 
-        // 1. Histogramme vertical de toutes les lignes pour trouver la bande de texte des coordonnées
+        // 1. Histogramme vertical avec lissage pour isoler les lignes de texte
         let mut row_counts = vec![0usize; thumb_h];
         for top_y in 0..thumb_h {
             for x in 0..thumb_w {
@@ -315,31 +315,54 @@ impl Win32StreamCapture {
         }
 
         let mut text_lines: Vec<(usize, usize)> = Vec::new();
-        let mut in_line = false;
-        let mut line_start = 0;
+        let mut line_start: Option<usize> = None;
+        let mut last_content_y = 0;
+
         for y in 0..thumb_h {
-            if row_counts[y] >= 4 {
-                if !in_line {
-                    in_line = true;
-                    line_start = y;
+            if row_counts[y] >= 2 {
+                if line_start.is_none() {
+                    line_start = Some(y);
                 }
-            } else if in_line {
-                in_line = false;
-                if y - line_start >= 4 {
-                    text_lines.push((line_start, y - 1));
+                last_content_y = y;
+            } else if let Some(s) = line_start {
+                if y - last_content_y > 2 {
+                    if last_content_y >= s && last_content_y - s >= 4 {
+                        text_lines.push((s, last_content_y));
+                    }
+                    line_start = None;
                 }
             }
         }
-        if in_line && thumb_h - line_start >= 4 {
-            text_lines.push((line_start, thumb_h - 1));
+        if let Some(s) = line_start {
+            if last_content_y >= s && last_content_y - s >= 4 {
+                text_lines.push((s, last_content_y));
+            }
         }
 
-        // Si aucune ligne isolable, utiliser la plage standard par défaut
-        let candidate_lines = if text_lines.is_empty() {
-            vec![(20usize, thumb_h.min(65))]
-        } else {
-            text_lines
-        };
+        // Dofus Unity HUD :
+        // Ligne 0 = Titre Zone (ex: "Mine Istairameur")
+        // Ligne 1 = Coordonnées (ex: "-3, 9")
+        let mut candidate_lines = Vec::new();
+        if text_lines.len() >= 2 {
+            candidate_lines.push(text_lines[1]); // Ligne coordonnées en 1er
+            candidate_lines.push(text_lines[0]);
+        } else if text_lines.len() == 1 {
+            candidate_lines.push(text_lines[0]);
+        }
+        candidate_lines.push((24usize, thumb_h.min(65))); // Fallback bande basse
+
+        const DIGIT_TEMPLATES: [[u8; 15]; 10] = [
+            [1,1,1, 1,0,1, 1,0,1, 1,0,1, 1,1,1], // 0
+            [0,1,0, 1,1,0, 0,1,0, 0,1,0, 1,1,1], // 1
+            [1,1,1, 0,0,1, 1,1,1, 1,0,0, 1,1,1], // 2
+            [1,1,1, 0,0,1, 0,1,1, 0,0,1, 1,1,1], // 3
+            [1,0,1, 1,0,1, 1,1,1, 0,0,1, 0,0,1], // 4
+            [1,1,1, 1,0,0, 1,1,1, 0,0,1, 1,1,1], // 5
+            [1,1,1, 1,0,0, 1,1,1, 1,0,1, 1,1,1], // 6
+            [1,1,1, 0,0,1, 0,1,0, 0,1,0, 0,1,0], // 7
+            [1,1,1, 1,0,1, 1,1,1, 1,0,1, 1,1,1], // 8
+            [1,1,1, 1,0,1, 1,1,1, 0,0,1, 1,1,1], // 9
+        ];
 
         for (y_scan_min, y_scan_max) in candidate_lines {
             let mut col_densities = vec![0usize; thumb_w];
@@ -397,7 +420,7 @@ impl Win32StreamCapture {
                                 }
                             }
                         }
-                        if count >= 3 {
+                        if count >= 2 {
                             glyph_boxes.push((sub_s, sub_e, y_min, y_max));
                         }
                     }
@@ -414,7 +437,7 @@ impl Win32StreamCapture {
                             }
                         }
                     }
-                    if count >= 3 {
+                    if count >= 2 {
                         glyph_boxes.push((sx, ex, y_min, y_max));
                     }
                 }
@@ -428,32 +451,29 @@ impl Win32StreamCapture {
                 Other,
             }
 
-            const DIGIT_TEMPLATES: [[u8; 15]; 10] = [
-                [1,1,1, 1,0,1, 1,0,1, 1,0,1, 1,1,1], // 0
-                [0,1,0, 1,1,0, 0,1,0, 0,1,0, 1,1,1], // 1
-                [1,1,1, 0,0,1, 1,1,1, 1,0,0, 1,1,1], // 2
-                [1,1,1, 0,0,1, 0,1,1, 0,0,1, 1,1,1], // 3
-                [1,0,1, 1,0,1, 1,1,1, 0,0,1, 0,0,1], // 4
-                [1,1,1, 1,0,0, 1,1,1, 0,0,1, 1,1,1], // 5
-                [1,1,1, 1,0,0, 1,1,1, 1,0,1, 1,1,1], // 6
-                [1,1,1, 0,0,1, 0,1,0, 0,1,0, 0,1,0], // 7
-                [1,1,1, 1,0,1, 1,1,1, 1,0,1, 1,1,1], // 8
-                [1,1,1, 1,0,1, 1,1,1, 0,0,1, 1,1,1], // 9
-            ];
-
             let mut recognized: Vec<Glyph> = Vec::new();
 
             for (x_min, x_max, y_min, y_max) in glyph_boxes {
                 let gw = x_max - x_min + 1;
                 let gh = y_max - y_min + 1;
+                let line_h = (y_scan_max - y_scan_min + 1).max(1);
+                let rel_y_bottom = y_max.saturating_sub(y_scan_min);
+                let rel_y_top = y_min.saturating_sub(y_scan_min);
 
-                if gh <= 7 && gw >= 3 {
+                // Signe Moins '-' : trait horizontal fin
+                if gh <= 5 && gw >= 3 && rel_y_top >= 1 && rel_y_bottom <= line_h {
                     recognized.push(Glyph::Minus);
-                } else if gh <= 9 && gw <= 5 && y_max >= y_scan_min + 15 {
+                } 
+                // Virgule ',' : petit signe compact dans le bas
+                else if gh <= 7 && gw <= 6 && rel_y_bottom >= line_h * 3 / 10 {
                     recognized.push(Glyph::Comma);
-                } else if gw <= 4 && gh >= 8 {
+                } 
+                // Chiffre '1' : barre verticale fine
+                else if gw <= 4 && gh >= 6 {
                     recognized.push(Glyph::Digit(1));
-                } else if gh >= 8 {
+                } 
+                // Chiffres complets '0-9' et symboles
+                else if gh >= 6 {
                     let mut grid = [0u8; 15];
                     for row in 0..5 {
                         for col in 0..3 {
@@ -472,13 +492,13 @@ impl Win32StreamCapture {
                                     }
                                 }
                             }
-                            if total_pixels > 0 && (white_pixels * 100 / total_pixels) >= 25 {
+                            if total_pixels > 0 && (white_pixels * 100 / total_pixels) >= 20 {
                                 grid[row * 3 + col] = 1;
                             }
                         }
                     }
 
-                    // Détection du symbole % (points en haut à gauche et bas à droite)
+                    // Détection du symbole %
                     if grid[0] == 1 && grid[14] == 1 && grid[2] == 0 && grid[12] == 0 {
                         recognized.push(Glyph::Percent);
                     } else {
@@ -491,7 +511,11 @@ impl Win32StreamCapture {
                                 best_digit = d;
                             }
                         }
-                        recognized.push(Glyph::Digit(best_digit as i32));
+                        if min_diff <= 5 {
+                            recognized.push(Glyph::Digit(best_digit as i32));
+                        } else {
+                            recognized.push(Glyph::Other);
+                        }
                     }
                 } else {
                     recognized.push(Glyph::Other);
@@ -511,6 +535,8 @@ impl Win32StreamCapture {
 
             let mut bonus_val = 0u32;
             let mut bonus_digits = 0;
+
+            let mut has_comma = false;
 
             enum Stage {
                 CoordX,
@@ -533,6 +559,7 @@ impl Win32StreamCapture {
                     }
                     Glyph::Comma => {
                         if x_digits > 0 {
+                            has_comma = true;
                             stage = Stage::CoordY;
                         }
                     }
@@ -583,7 +610,8 @@ impl Win32StreamCapture {
                 }
             }
 
-            if x_digits > 0 && y_digits > 0 {
+            // Validation : virgule obligatoire et coordonnées réalistes
+            if has_comma && x_digits > 0 && y_digits > 0 && x_val <= 150 && y_val <= 150 {
                 let lvl_opt = if level_digits > 0 { Some(level_val) } else { None };
                 let bonus_opt = if bonus_digits > 0 || bonus_val > 0 {
                     Some(format!("{}%", bonus_val))
@@ -627,5 +655,33 @@ impl Win32StreamCapture {
         bmp.extend_from_slice(raw_pixels);
 
         bmp
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    #[test]
+    fn test_lookup_zone_mine_istairameur() {
+        let (zone, lvl, plots) = Win32StreamCapture::lookup_zone_and_level(-3, 9);
+        assert_eq!(zone, "Mine Istairameur");
+        assert_eq!(lvl, 120);
+        assert_eq!(plots, 2);
+    }
+
+    #[test]
+    fn test_lookup_zone_pandala() {
+        let (zone, lvl, plots) = Win32StreamCapture::lookup_zone_and_level(25, -29);
+        assert_eq!(zone, "Île de Pandala (Plantala)");
+        assert_eq!(lvl, 100);
+        assert_eq!(plots, 0);
+    }
+
+    #[test]
+    fn test_lookup_zone_astrub() {
+        let (zone, lvl, _) = Win32StreamCapture::lookup_zone_and_level(7, -19);
+        assert_eq!(zone, "Astrub (Cité d'Astrub)");
+        assert_eq!(lvl, 10);
     }
 }

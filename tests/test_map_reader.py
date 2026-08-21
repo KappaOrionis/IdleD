@@ -83,6 +83,16 @@ def test_map_hud_reader_invalid_or_loading():
     assert result["error_message"] is not None
     assert result["error_message"] is not None
 
+def test_map_hud_reader_mine_istairameur():
+    reader = MapHUDReader()
+    # Test pour le cas réel de la Mine Istairameur : "Mine Istairameur" et "-3, 9"
+    result = reader.parse_hud_text("Mine Istairameur", "-3, 9")
+    
+    assert result["is_detected"] is True
+    assert result["zone_name"] == "Mine Istairameur"
+    assert result["tile_coords"] == [-3, 9]
+    assert result["error_message"] is None
+
 def test_map_hud_reader_fallback_defaults():
     reader = MapHUDReader()
     result = reader.parse_hud_text("", "Invalid Format")
